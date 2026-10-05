@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.Musibility" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#D7FA00</item>
+        <item name="colorPrimaryVariant">#B6D400</item>
+        <item name="colorSecondary">#D7FA00</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:statusBarColor">#010101</item>
+        <item name="android:navigationBarColor">#010101</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#010101</item>
+    </style>
+</resources>
