@@ -5,6 +5,17 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+try {
+    System.getProperties().remove("ANDROID_PREFS_ROOT")
+    def pe = Class.forName("java.lang.ProcessEnvironment")
+    def field = pe.getDeclaredField("theCaseInsensitiveEnvironment")
+    field.setAccessible(true)
+    def map = (Map) field.get(null)
+    map.remove("ANDROID_PREFS_ROOT")
+} catch (Throwable ignored) {
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {

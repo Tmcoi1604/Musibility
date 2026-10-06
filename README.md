@@ -35,7 +35,7 @@
 - Giao diện phát nhạc dùng icon cho các nút điều khiển, thêm playlist, chia sẻ và lời bài hát. Nút Back của điện thoại từ các giao diện trong app sẽ quay về **Khám phá**.
 - Có thể tải bài hát trực tuyến từ giao diện phát nhạc; tệp được lưu trong thư mục nhạc riêng của Musibility và xuất hiện trong tab **Tải về**.
 - Giao diện phát nhạc tự phối nền chuyển sắc theo màu ảnh bìa album. Điều khiển media của Android hỗ trợ phát/tạm dừng, chuyển bài và tua khi thiết bị hiển thị thanh tiến trình.
-- Tạo playlist cá nhân, phát playlist/album, phát/dừng, tua, chuyển bài, tráo bài, chia sẻ đường dẫn; widget màn hình chính có ảnh bìa, tiến trình và điều khiển.
+- Tạo playlist cá nhân, phát playlist/album, phát/dừng, tua, chuyển bài, tráo bài, chia sẻ đường dẫn; widget màn hình chính dạng thẻ ngang có ảnh bìa, tên bài hát, nghệ sĩ, tiến trình và nút điều khiển.
 - Jamendo fallback chỉ chọn track có URL audio và thông tin giấy phép Creative Commons; giấy phép có liên kết từ màn hình phát.
 - Lời bài hát từ LRCLIB khi có dữ liệu, đồng bộ khi nguồn cung cấp timed lyrics.
 - Nhận diện âm thanh bằng microphone và ACRCloud nếu người dùng tự cấu hình. Android không cho ứng dụng thông thường đọc trực tiếp âm thanh nội bộ đang phát qua loa; hướng microphone về nguồn âm thanh bên ngoài.

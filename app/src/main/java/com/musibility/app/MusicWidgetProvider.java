@@ -49,17 +49,22 @@ public class MusicWidgetProvider extends AppWidgetProvider {
     private static void update(Context context, AppWidgetManager manager, int id, Bitmap cover) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.music_widget);
         android.content.SharedPreferences state = context.getSharedPreferences("musibility_widget", Context.MODE_PRIVATE);
+        views.setTextViewText(R.id.widget_title, state.getString("title", "Musibility"));
         views.setTextViewText(R.id.widget_artist, state.getString("artist", "Chạm để khám phá âm nhạc"));
         int duration = state.getInt("duration", 0);
         int position = state.getInt("position", 0);
         views.setProgressBar(R.id.widget_progress, 1000,
                 duration <= 0 ? 0 : Math.min(1000, (int) ((long) position * 1000 / duration)), false);
         views.setImageViewResource(R.id.widget_play, state.getBoolean("playing", false)
-                ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
+                ? R.drawable.ic_pause : R.drawable.ic_play);
         if (cover != null) views.setImageViewBitmap(R.id.widget_cover, cover);
         setAction(context, views, R.id.widget_previous, "com.musibility.app.WIDGET_PREVIOUS", 12);
         setAction(context, views, R.id.widget_play, "com.musibility.app.WIDGET_PLAY_PAUSE", 13);
         setAction(context, views, R.id.widget_next, "com.musibility.app.WIDGET_NEXT", 14);
+        Intent launch = new Intent(context, MainActivity.class);
+        PendingIntent openApp = PendingIntent.getActivity(context, 15, launch,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        views.setOnClickPendingIntent(R.id.widget_root, openApp);
         manager.updateAppWidget(id, views);
     }
 
