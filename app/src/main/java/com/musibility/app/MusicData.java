@@ -22,20 +22,7 @@ public final class MusicData {
         SharedPreferences p = prefs(context);
         try {
             JSONArray history = new JSONArray(p.getString("history", "[]"));
-            JSONObject item = new JSONObject();
-            item.put("id", song.id);
-            item.put("title", song.title);
-            item.put("artist", song.artist);
-            item.put("artistId", song.artistId);
-            item.put("artistSourceId", song.artistSourceId);
-            item.put("album", song.album);
-            item.put("cover", song.coverUrl);
-            item.put("audio", song.audioUrl);
-            item.put("link", song.link);
-            item.put("license", song.licenseUrl);
-            item.put("provider", song.provider);
-            item.put("providerTrackId", song.providerTrackId);
-            item.put("duration", song.durationSeconds);
+            JSONObject item = toJson(song);
             history.put(item);
             while (history.length() > 50) history.remove(0);
             p.edit().putString("history", history.toString()).apply();
@@ -158,6 +145,11 @@ public final class MusicData {
         json.put("audio", song.audioUrl); json.put("link", song.link);
         json.put("license", song.licenseUrl); json.put("duration", song.durationSeconds);
         json.put("provider", song.provider); json.put("providerTrackId", song.providerTrackId);
+        json.put("albumArtist", song.albumArtist); json.put("genre", song.genre);
+        json.put("year", song.year); json.put("trackNumber", song.trackNumber);
+        json.put("fileName", song.fileName); json.put("filePath", song.filePath);
+        json.put("mimeType", song.mimeType); json.put("fileSizeBytes", song.fileSizeBytes);
+        json.put("bitrate", song.bitrate);
         return json;
     }
 
@@ -167,6 +159,9 @@ public final class MusicData {
                 json.optString("audio", json.optString("preview")), json.optString("link"),
                 json.optInt("duration"), json.optString("license"),
                 json.optString("provider", "Jamendo"), json.optString("providerTrackId"),
-                json.optString("artistSourceId", json.optString("artistId")));
+                json.optString("artistSourceId", json.optString("artistId")),
+                json.optString("albumArtist"), json.optString("genre"), json.optString("year"),
+                json.optString("trackNumber"), json.optString("fileName"), json.optString("filePath"),
+                json.optString("mimeType"), json.optLong("fileSizeBytes"), json.optInt("bitrate"));
     }
 }

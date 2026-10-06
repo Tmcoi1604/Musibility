@@ -3,6 +3,7 @@ package com.musibility.app;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -18,6 +19,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.database.Cursor;
+import android.media.MediaMetadataRetriever;
+import android.provider.MediaStore;
 import android.text.InputType;
 import android.text.SpannableStringBuilder;
 import android.text.style.ForegroundColorSpan;
@@ -54,6 +58,7 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
     private static final int AUDIO_PERMISSION = 41;
     private static final int LOCATION_PERMISSION = 42;
+    private static final int AUDIO_LIBRARY_PERMISSION = 43;
     private final ExecutorService worker = Executors.newFixedThreadPool(3);
     private final Handler mainHandler = new Handler();
     private final ArrayList<Song> queue = new ArrayList<>();
@@ -154,7 +159,8 @@ public class MainActivity extends AppCompatActivity {
         nav.setGravity(Gravity.CENTER);
         nav.setBackgroundColor(Color.rgb(18, 18, 18));
         String[][] tabs = {{"Khám phá", "discover"}, {"Playlist", "playlists"},
-                {"Nhận diện", "identify"}, {"Bản đồ", "map"}, {"Đang phát", "player"}};
+                {"Tải về", "downloads"}, {"Nhận diện", "identify"},
+                {"Bản đồ", "map"}, {"Đang phát", "player"}};
         for (String[] tab : tabs) {
             TextView item = new TextView(this);
             item.setText(tab[0]);
@@ -172,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
     private void navigate(String page) {
         if ("discover".equals(page)) showDiscover();
         else if ("playlists".equals(page)) showPlaylists();
+        else if ("downloads".equals(page)) showDownloads();
         else if ("identify".equals(page)) showIdentify();
         else if ("map".equals(page)) openMap();
         else showPlayer();
@@ -371,10 +378,13 @@ public class MainActivity extends AppCompatActivity {
         title.setTypeface(null, Typeface.BOLD);
         TextView artist = addLabel(content, currentSong.artist, 16, Color.rgb(215, 250, 0));
         artist.setGravity(Gravity.CENTER);
-        artist.setOnClickListener(v -> showArtist(currentSong.artist,
-                currentSong.artistSourceId, currentSong.provider));
+        if (!"Thiết bị".equals(currentSong.provider)) {
+            artist.setOnClickListener(v -> showArtist(currentSong.artist,
+                    currentSong.artistSourceId, currentSong.provider));
+        }
         TextView album = addLabel(content, currentSong.album, 13, Color.GRAY);
         album.setGravity(Gravity.CENTER);
+        addSongInformation(currentSong);
         if (!currentSong.licenseUrl.isEmpty()) {
             TextView license = addLabel(content, "Nhạc Creative Commons · Xem giấy phép", 12, Color.LTGRAY);
             license.setGravity(Gravity.CENTER);
@@ -557,6 +567,203 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void showDownloads() {
+        currentScreen = "downloads";
+        createShell("Nhạc trên thiết bị");
+        if (!hasAudioLibraryPermission()) {
+            addLabel(content, "Cho phép Musibility đọc các tệp âm thanh trên thiết bị để hiển thị và phát nhạc đã tải về. Ứng dụng chỉ đọc thư viện nhạc, không tải tệp lên.", 14, Color.LTGRAY);
+            Button grant = button("Cho phép truy cập nhạc");
+            content.addView(grant, matchWrap());
+            grant.setOnClickListener(v -> requestAudioLibraryPermission());
+            return;
+        }
+        Button refresh = button("↻  Làm mới thư viện");
+        content.addView(refresh, matchWrap());
+        addLabel(content, "Đang quét các tệp âm thanh trên thiết bị…", 14, Color.LTGRAY);
+        refresh.setOnClickListener(v -> showDownloads());
+        runAsync(this::loadDeviceSongs, songs -> {
+            content.removeViews(1, content.getChildCount() - 1);
+            if (songs.isEmpty()) {
+                addLabel(content, "Chưa tìm thấy tệp nhạc. Hãy tải bài hát về thiết bị rồi làm mới thư viện.", 14, Color.GRAY);
+                return;
+            }
+            addLabel(content, songs.size() + " bài hát trên thiết bị", 13, Color.LTGRAY);
+            renderSongs(songs, false);
+        });
+    }
+
+    private boolean hasAudioLibraryPermission() {
+        String permission = Build.VERSION.SDK_INT >= 33
+                ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
+        return Build.VERSION.SDK_INT < 23
+                || ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestAudioLibraryPermission() {
+        String permission = Build.VERSION.SDK_INT >= 33
+                ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
+        requestPermissions(new String[]{permission}, AUDIO_LIBRARY_PERMISSION);
+    }
+
+    private List<Song> loadDeviceSongs() throws Exception {
+        List<Song> songs = new ArrayList<>();
+        String[] columns = {
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.ALBUM_ID,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.SIZE,
+                MediaStore.Audio.Media.MIME_TYPE,
+                MediaStore.Audio.Media.TRACK
+        };
+        String[] queryColumns = columns;
+        boolean hasRelativePath = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
+        if (hasRelativePath) {
+            queryColumns = new String[columns.length + 1];
+            System.arraycopy(columns, 0, queryColumns, 0, columns.length);
+            queryColumns[columns.length] = MediaStore.Audio.Media.RELATIVE_PATH;
+        }
+        try (Cursor cursor = getContentResolver().query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, queryColumns, null, null,
+                MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC")) {
+            if (cursor == null) throw new java.io.IOException("Không thể đọc thư viện âm thanh trên thiết bị.");
+            int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+            int titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+            int artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+            int albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
+            int durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+            int albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID);
+            int displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME);
+            int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE);
+            int mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE);
+            int trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK);
+            int pathColumn = hasRelativePath
+                    ? cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH) : -1;
+            while (cursor.moveToNext()) {
+                String mimeType = cursor.getString(mimeColumn);
+                if (mimeType != null && !mimeType.startsWith("audio/")) continue;
+                long mediaId = cursor.getLong(idColumn);
+                Uri audioUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, mediaId);
+                String displayName = value(cursor, displayNameColumn);
+                String title = cleanMediaValue(value(cursor, titleColumn));
+                if (title.isEmpty()) title = withoutExtension(displayName);
+                String artist = cleanMediaValue(value(cursor, artistColumn));
+                String album = cleanMediaValue(value(cursor, albumColumn));
+                long durationMs = cursor.getLong(durationColumn);
+                long albumId = cursor.getLong(albumIdColumn);
+                String coverUri = albumId > 0
+                        ? ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId).toString()
+                        : "";
+                String albumArtist = "";
+                String genre = "";
+                String year = "";
+                String trackNumber = value(cursor, trackColumn);
+                int bitrate = 0;
+                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                try {
+                    retriever.setDataSource(this, audioUri);
+                    title = cleanMediaValue(metadata(retriever, MediaMetadataRetriever.METADATA_KEY_TITLE, title));
+                    artist = cleanMediaValue(metadata(retriever, MediaMetadataRetriever.METADATA_KEY_ARTIST, artist));
+                    album = cleanMediaValue(metadata(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUM, album));
+                    albumArtist = cleanMediaValue(metadata(retriever,
+                            MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST, ""));
+                    genre = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_GENRE, "");
+                    year = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_YEAR, "");
+                    trackNumber = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER, trackNumber);
+                    String metadataDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if (durationMs <= 0 && metadataDuration != null) durationMs = Long.parseLong(metadataDuration);
+                    String metadataBitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE);
+                    if (metadataBitrate != null) bitrate = Integer.parseInt(metadataBitrate) / 1000;
+                    byte[] embeddedArt = retriever.getEmbeddedPicture();
+                    if (embeddedArt != null) coverUri = cacheCover(mediaId, embeddedArt, coverUri);
+                } catch (Exception e) {
+                    android.util.Log.w("Musibility", "Could not read audio metadata for " + displayName, e);
+                } finally {
+                    try { retriever.release(); } catch (Exception e) {
+                        android.util.Log.w("Musibility", "Could not release metadata retriever", e);
+                    }
+                }
+                String filePath = pathColumn >= 0 ? value(cursor, pathColumn) : "";
+                songs.add(new Song(-mediaId - 1, title, artist, 0, album, coverUri,
+                        audioUri.toString(), "", (int) Math.max(0, durationMs / 1000), "",
+                        "Thiết bị", String.valueOf(mediaId), "", albumArtist, genre, year,
+                        trackNumber, displayName, filePath, mimeType, cursor.getLong(sizeColumn), bitrate));
+            }
+        }
+        return songs;
+    }
+
+    private String value(Cursor cursor, int column) {
+        if (column < 0 || cursor.isNull(column)) return "";
+        return cursor.getString(column);
+    }
+
+    private String cleanMediaValue(String value) {
+        return value == null || value.equalsIgnoreCase("<unknown>") ? "" : value.trim();
+    }
+
+    private String metadata(MediaMetadataRetriever retriever, int key, String fallback) {
+        String value = retriever.extractMetadata(key);
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private String withoutExtension(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+
+    private String cacheCover(long mediaId, byte[] image, String fallback) {
+        java.io.File cover = new java.io.File(getCacheDir(), "album-art/" + mediaId + ".jpg");
+        try {
+            java.io.File directory = cover.getParentFile();
+            if (directory == null || (!directory.exists() && !directory.mkdirs())) {
+                throw new java.io.IOException("Không thể tạo bộ nhớ đệm ảnh bìa.");
+            }
+            try (java.io.FileOutputStream output = new java.io.FileOutputStream(cover)) {
+                output.write(image);
+            }
+            return Uri.fromFile(cover).toString();
+        } catch (Exception e) {
+            android.util.Log.w("Musibility", "Could not cache embedded album art", e);
+            return fallback;
+        }
+    }
+
+    private void addSongInformation(Song song) {
+        addLabel(content, "Thông tin bài hát", 14, Color.rgb(215, 250, 0));
+        addInformationLine("Nguồn", song.provider);
+        addInformationLine("Nghệ sĩ album", song.albumArtist);
+        addInformationLine("Thể loại", song.genre);
+        addInformationLine("Năm phát hành", song.year);
+        addInformationLine("Số thứ tự", song.trackNumber);
+        if (song.durationSeconds > 0) addInformationLine("Thời lượng", formatTime(song.durationSeconds));
+        addInformationLine("Tệp", song.fileName);
+        addInformationLine("Thư mục", song.filePath);
+        addInformationLine("Định dạng", audioFormat(song.mimeType));
+        if (song.fileSizeBytes > 0) addInformationLine("Dung lượng", formatFileSize(song.fileSizeBytes));
+        if (song.bitrate > 0) addInformationLine("Bitrate", song.bitrate + " kbps");
+    }
+
+    private void addInformationLine(String label, String value) {
+        if (value == null || value.trim().isEmpty()) return;
+        addLabel(content, label + ": " + value, 12, Color.LTGRAY);
+    }
+
+    private String audioFormat(String mimeType) {
+        if (mimeType == null || mimeType.isEmpty()) return "";
+        String format = mimeType.startsWith("audio/") ? mimeType.substring(6) : mimeType;
+        return format.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private String formatFileSize(long bytes) {
+        if (bytes >= 1024L * 1024L * 1024L) return String.format(java.util.Locale.getDefault(), "%.2f GB", bytes / (1024f * 1024f * 1024f));
+        if (bytes >= 1024L * 1024L) return String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / (1024f * 1024f));
+        return String.format(java.util.Locale.getDefault(), "%.0f KB", bytes / 1024f);
+    }
+
     private void showIdentify() {
         currentScreen = "identify";
         createShell("Nhận diện bài hát");
@@ -673,6 +880,10 @@ public class MainActivity extends AppCompatActivity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == AUDIO_PERMISSION && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) requestAndIdentify();
+        if (requestCode == AUDIO_LIBRARY_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) showDownloads();
+            else Toast.makeText(this, "Cần quyền đọc âm thanh để hiển thị nhạc trên thiết bị.", Toast.LENGTH_LONG).show();
+        }
         if (requestCode == LOCATION_PERMISSION && currentSong != null
                 && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
@@ -684,10 +895,22 @@ public class MainActivity extends AppCompatActivity {
         if (url == null || url.isEmpty()) return;
         worker.execute(() -> {
             try {
-                java.net.URLConnection connection = new URL(url).openConnection();
-                connection.setConnectTimeout(8000);
-                connection.setReadTimeout(8000);
-                android.graphics.Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
+                Uri uri = Uri.parse(url);
+                android.graphics.Bitmap bitmap;
+                if ("content".equals(uri.getScheme())) {
+                    try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
+                        bitmap = input == null ? null : BitmapFactory.decodeStream(input);
+                    }
+                } else if ("file".equals(uri.getScheme())) {
+                    bitmap = BitmapFactory.decodeFile(uri.getPath());
+                } else {
+                    java.net.URLConnection connection = new URL(url).openConnection();
+                    connection.setConnectTimeout(8000);
+                    connection.setReadTimeout(8000);
+                    try (java.io.InputStream input = connection.getInputStream()) {
+                        bitmap = BitmapFactory.decodeStream(input);
+                    }
+                }
                 if (bitmap != null) mainHandler.post(() -> target.setImageBitmap(bitmap));
             } catch (Exception e) { android.util.Log.w("Musibility", "Could not load album art", e); }
         });
