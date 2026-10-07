@@ -25,7 +25,6 @@ import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -64,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean currentQueueIsPlaylist;
     private Song pendingLocationSong;
     private String currentScreen = "discover";
-    private TextView playerPlayButton;
+    private ImageButton playerPlayButton;
     private TextView playerTime;
     private SeekBar playerSeekBar;
     private TextView lyricsText;
@@ -102,7 +101,12 @@ public class MainActivity extends AppCompatActivity {
                 if ("player".equals(currentScreen)) showPlayer();
             }
             boolean playing = intent.getBooleanExtra("playing", false);
-            if (playerPlayButton != null) playerPlayButton.setText(playing ? "Ⅱ" : "▶");
+            if (playerPlayButton != null) playerPlayButton.setImageResource(
+                    playing ? R.drawable.ic_pause : R.drawable.ic_play);
+            String playbackError = intent.getStringExtra("error");
+            if (playbackError != null && !playbackError.isEmpty()) {
+                Toast.makeText(MainActivity.this, playbackError, Toast.LENGTH_LONG).show();
+            }
             if (playerSeekBar != null) {
                 int duration = intent.getIntExtra("duration", 0);
                 int position = intent.getIntExtra("position", 0);
@@ -153,16 +157,21 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER);
         nav.setBackgroundColor(Color.rgb(18, 18, 18));
-        String[][] tabs = {{"Khám phá", "discover"}, {"Playlist", "playlists"},
-                {"Nhận diện", "identify"}, {"Bản đồ", "map"}, {"Đang phát", "player"}};
-        for (String[] tab : tabs) {
-            TextView item = new TextView(this);
-            item.setText(tab[0]);
-            item.setTextSize(11);
-            item.setGravity(Gravity.CENTER);
-            item.setTextColor(tab[1].equals(currentScreen) ? Color.rgb(215, 250, 0) : Color.LTGRAY);
-            item.setPadding(dp(3), dp(13), dp(3), dp(13));
-            item.setOnClickListener(v -> navigate(tab[1]));
+        int[][] tabs = {{R.drawable.ic_home, R.string.nav_discover},
+                {R.drawable.ic_playlist, R.string.nav_playlists},
+                {R.drawable.ic_mic, R.string.nav_identify},
+                {R.drawable.ic_map, R.string.nav_map},
+                {R.drawable.ic_play, R.string.nav_player}};
+        String[] pages = {"discover", "playlists", "identify", "map", "player"};
+        for (int i = 0; i < tabs.length; i++) {
+            final String page = pages[i];
+            ImageButton item = new ImageButton(this);
+            item.setImageResource(tabs[i][0]);
+            item.setContentDescription(getString(tabs[i][1]));
+            item.setColorFilter(page.equals(currentScreen) ? Color.rgb(215, 250, 0) : Color.LTGRAY);
+            item.setBackgroundColor(Color.TRANSPARENT);
+            item.setPadding(dp(12), dp(12), dp(12), dp(12));
+            item.setOnClickListener(v -> navigate(page));
             nav.addView(item, new LinearLayout.LayoutParams(0, -2, 1));
         }
         root.addView(nav);
@@ -189,18 +198,18 @@ public class MainActivity extends AppCompatActivity {
         search.setInputType(InputType.TYPE_CLASS_TEXT);
         content.addView(search, matchWrap());
         LinearLayout actions = new LinearLayout(this);
-        Button tracks = button("Tìm bài hát");
-        Button artist = button("Tìm nghệ sĩ");
-        Button playlists = button("Playlist nghệ sĩ");
-        actions.addView(tracks, new LinearLayout.LayoutParams(0, -2, 1));
-        actions.addView(artist, new LinearLayout.LayoutParams(0, -2, 1));
-        actions.addView(playlists, new LinearLayout.LayoutParams(0, -2, 1));
+        ImageButton tracks = iconButton(R.drawable.ic_search, "Tìm bài hát");
+        ImageButton artist = iconButton(R.drawable.ic_artist, "Tìm nghệ sĩ");
+        ImageButton playlists = iconButton(R.drawable.ic_playlist, "Tìm playlist");
+        actions.addView(tracks, new LinearLayout.LayoutParams(0, dp(56), 1));
+        actions.addView(artist, new LinearLayout.LayoutParams(0, dp(56), 1));
+        actions.addView(playlists, new LinearLayout.LayoutParams(0, dp(56), 1));
         content.addView(actions);
         tracks.setOnClickListener(v -> searchTracks(search.getText().toString()));
         artist.setOnClickListener(v -> searchArtists(search.getText().toString()));
         playlists.setOnClickListener(v -> searchPlaylists(search.getText().toString()));
-        Button chart = button("🔥  Những bài được nghe nhiều");
-        content.addView(chart, matchWrap());
+        ImageButton chart = iconButton(R.drawable.ic_chart, "Bài hát phổ biến");
+        content.addView(chart, new LinearLayout.LayoutParams(dp(56), dp(56)));
         chart.setOnClickListener(v -> loadChart());
         addLabel(content, "Đề xuất từ lịch sử nghe", 20, Color.WHITE);
         List<Song> recent = MusicData.recentSongs(this);
@@ -228,8 +237,8 @@ public class MainActivity extends AppCompatActivity {
         if (query.trim().isEmpty()) return;
         screenGeneration++;
         content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
-        content.addView(back, matchWrap());
+        ImageButton back = iconButton(R.drawable.ic_back, "Quay lại tìm kiếm");
+        content.addView(back, new LinearLayout.LayoutParams(dp(52), dp(52)));
         back.setOnClickListener(v -> showDiscover());
         addLabel(content, "Kết quả bài hát", 20, Color.WHITE);
         runAsync(() -> MusicCatalog.searchTracks(query), this::addSongs);
@@ -239,8 +248,8 @@ public class MainActivity extends AppCompatActivity {
         if (query.trim().isEmpty()) return;
         screenGeneration++;
         content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
-        content.addView(back, matchWrap());
+        ImageButton back = iconButton(R.drawable.ic_back, "Quay lại tìm kiếm");
+        content.addView(back, new LinearLayout.LayoutParams(dp(52), dp(52)));
         back.setOnClickListener(v -> showDiscover());
         addLabel(content, "Nghệ sĩ phù hợp", 20, Color.WHITE);
         runAsync(() -> MusicCatalog.searchArtists(query), artists -> {
@@ -249,9 +258,15 @@ public class MainActivity extends AppCompatActivity {
                 String provider = artist.optString("_provider", "Audius");
                 String artistName = artist.optString("name");
                 if (artistId.isEmpty()) continue;
-                Button result = button("♪  " + artistName + "  ·  Xem bài hát");
-                content.addView(result, matchWrap());
+                LinearLayout result = new LinearLayout(this);
+                result.setGravity(Gravity.CENTER_VERTICAL);
+                ImageButton artistIcon = iconButton(R.drawable.ic_artist, "Xem nghệ sĩ " + artistName);
+                result.addView(artistIcon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+                TextView artistLabel = addLabel(result, artistName, 16, Color.WHITE);
+                artistLabel.setPadding(dp(12), dp(12), dp(12), dp(12));
                 result.setOnClickListener(v -> showArtist(artistName, artistId, provider));
+                artistIcon.setOnClickListener(v -> showArtist(artistName, artistId, provider));
+                content.addView(result, matchWrap());
             }
             if (artists.isEmpty()) addLabel(content, "Không tìm thấy nghệ sĩ.", 14, Color.GRAY);
         });
@@ -261,8 +276,8 @@ public class MainActivity extends AppCompatActivity {
         if (query.trim().isEmpty()) return;
         screenGeneration++;
         content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
-        content.addView(back, matchWrap());
+        ImageButton back = iconButton(R.drawable.ic_back, "Quay lại tìm kiếm");
+        content.addView(back, new LinearLayout.LayoutParams(dp(52), dp(52)));
         back.setOnClickListener(v -> showDiscover());
         addLabel(content, "Playlist và album", 20, Color.WHITE);
         runAsync(() -> MusicCatalog.searchPlaylists(query), albums -> {
@@ -271,11 +286,19 @@ public class MainActivity extends AppCompatActivity {
                         album.optString("name", album.optString("title")));
                 JSONObject owner = album.optJSONObject("user");
                 String ownerName = owner == null ? album.optString("artist_name") : owner.optString("name");
-                Button item = button("♫  " + name + (ownerName.isEmpty() ? "" : "  ·  " + ownerName));
-                content.addView(item, matchWrap());
-                item.setOnClickListener(v -> runAsync(() -> MusicCatalog.playlistTracks(
+                LinearLayout item = new LinearLayout(this);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                ImageButton playlistIcon = iconButton(R.drawable.ic_playlist, "Mở playlist " + name);
+                item.addView(playlistIcon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+                TextView playlistLabel = addLabel(item, name + (ownerName.isEmpty() ? "" : " · " + ownerName),
+                        15, Color.WHITE);
+                playlistLabel.setPadding(dp(12), dp(12), dp(12), dp(12));
+                Runnable openPlaylist = () -> runAsync(() -> MusicCatalog.playlistTracks(
                                 album.optString("_sourceId", album.optString("id")),
-                                album.optString("_provider", "Audius"), name), this::addPlaylistSongs));
+                                album.optString("_provider", "Audius"), name), this::addPlaylistSongs);
+                item.setOnClickListener(v -> openPlaylist.run());
+                playlistIcon.setOnClickListener(v -> openPlaylist.run());
+                content.addView(item, matchWrap());
             }
             if (albums.isEmpty()) addLabel(content, "Không tìm thấy playlist.", 14, Color.GRAY);
         });
@@ -405,9 +428,11 @@ public class MainActivity extends AppCompatActivity {
         });
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
-        Button previous = button("|◀");
-        playerPlayButton = button("▶");
-        Button next = button("▶|");
+        ImageButton previous = iconButton(R.drawable.ic_previous, "Bài trước");
+        playerPlayButton = iconButton(R.drawable.ic_play, "Phát hoặc tạm dừng");
+        ImageButton next = iconButton(R.drawable.ic_next, "Bài tiếp theo");
+        LinearLayout.LayoutParams playSize = new LinearLayout.LayoutParams(dp(64), dp(64));
+        playerPlayButton.setLayoutParams(playSize);
         controls.addView(previous); controls.addView(playerPlayButton); controls.addView(next);
         content.addView(controls);
         previous.setOnClickListener(v -> sendPlaybackAction(PlaybackService.ACTION_PREVIOUS));
@@ -415,16 +440,19 @@ public class MainActivity extends AppCompatActivity {
         playerPlayButton.setOnClickListener(v -> sendPlaybackAction(PlaybackService.ACTION_TOGGLE));
         LinearLayout options = new LinearLayout(this);
         options.setGravity(Gravity.CENTER);
-        Button add = button("＋ Playlist");
-        Button share = button("Chia sẻ");
-        Button lyrics = button("Lời bài hát");
+        ImageButton add = iconButton(R.drawable.ic_add_playlist, "Thêm vào playlist");
+        ImageButton share = iconButton(R.drawable.ic_share, "Chia sẻ bài hát");
+        ImageButton lyrics = iconButton(R.drawable.ic_lyrics, "Lời bài hát");
         options.addView(add); options.addView(share); options.addView(lyrics);
         content.addView(options);
         add.setOnClickListener(v -> choosePlaylist());
         share.setOnClickListener(v -> shareSong());
         lyrics.setOnClickListener(v -> showLyrics());
         if (currentQueueIsPlaylist) {
-            Button shuffleButton = button(shuffle ? "🔀 Đang bật tráo bài" : "🔀 Tráo bài trong playlist");
+            ImageButton shuffleButton = iconButton(R.drawable.ic_shuffle,
+                    shuffle ? "Tắt tráo bài" : "Bật tráo bài");
+            if (shuffle) shuffleButton.setImageTintList(
+                    android.content.res.ColorStateList.valueOf(Color.BLACK));
             content.addView(shuffleButton);
             shuffleButton.setOnClickListener(v -> {
                 shuffle = !shuffle;
@@ -438,7 +466,8 @@ public class MainActivity extends AppCompatActivity {
             android.content.SharedPreferences state = getSharedPreferences("musibility_widget", MODE_PRIVATE);
             boolean playing = state.getBoolean("playing", false);
             mainHandler.post(() -> {
-                if (playerPlayButton != null) playerPlayButton.setText(playing ? "Ⅱ" : "▶");
+                if (playerPlayButton != null) playerPlayButton.setImageResource(
+                        playing ? R.drawable.ic_pause : R.drawable.ic_play);
             });
         });
     }
@@ -529,8 +558,8 @@ public class MainActivity extends AppCompatActivity {
     private void showPlaylists() {
         currentScreen = "playlists";
         createShell("Playlist của tôi");
-        Button create = button("＋  Tạo playlist mới");
-        content.addView(create, matchWrap());
+        ImageButton create = iconButton(R.drawable.ic_create_playlist, "Tạo playlist mới");
+        content.addView(create, new LinearLayout.LayoutParams(dp(56), dp(56)));
         create.setOnClickListener(v -> {
             EditText input = new EditText(this);
             input.setHint("Tên playlist");
@@ -545,8 +574,13 @@ public class MainActivity extends AppCompatActivity {
         List<String> names = MusicData.playlistNames(this);
         if (names.isEmpty()) addLabel(content, "Playlist cá nhân được lưu trên thiết bị.", 14, Color.GRAY);
         for (String name : names) {
-            Button playlist = button("♫  " + name + "  ·  " + MusicData.playlistSongs(this, name).size() + " bài");
-            content.addView(playlist, matchWrap());
+            LinearLayout playlist = new LinearLayout(this);
+            playlist.setGravity(Gravity.CENTER_VERTICAL);
+            ImageButton openPlaylist = iconButton(R.drawable.ic_playlist, "Mở playlist " + name);
+            playlist.addView(openPlaylist, new LinearLayout.LayoutParams(dp(56), dp(56)));
+            TextView playlistLabel = addLabel(playlist,
+                    name + " · " + MusicData.playlistSongs(this, name).size() + " bài", 15, Color.WHITE);
+            playlistLabel.setPadding(dp(12), dp(12), dp(12), dp(12));
             playlist.setOnClickListener(v -> {
                 List<Song> songs = MusicData.playlistSongs(this, name);
                 content.removeAllViews();
@@ -554,6 +588,8 @@ public class MainActivity extends AppCompatActivity {
                 if (songs.isEmpty()) addLabel(content, "Playlist đang trống. Thêm bài từ màn hình phát nhạc.", 14, Color.GRAY);
                 else addPlaylistSongs(songs);
             });
+            openPlaylist.setOnClickListener(v -> playlist.performClick());
+            content.addView(playlist, matchWrap());
         }
     }
 
@@ -562,8 +598,8 @@ public class MainActivity extends AppCompatActivity {
         createShell("Nhận diện bài hát");
         TextView icon = addLabel(content, "♫", 76, Color.rgb(215, 250, 0));
         icon.setGravity(Gravity.CENTER);
-        Button identify = button("Nhấn để nghe");
-        content.addView(identify, matchWrap());
+        ImageButton identify = iconButton(R.drawable.ic_mic, "Nhấn để nhận diện bài hát");
+        content.addView(identify, new LinearLayout.LayoutParams(dp(64), dp(64)));
         addLabel(content, "Musibility dùng microphone để nghe âm thanh xung quanh và tra cứu bằng ACRCloud. Ứng dụng không đọc âm thanh nội bộ từ loa; hãy cấp quyền microphone khi được hỏi.", 14, Color.LTGRAY);
         identify.setOnClickListener(v -> requestAndIdentify());
     }
@@ -588,16 +624,16 @@ public class MainActivity extends AppCompatActivity {
                     EditText query = new EditText(this);
                     query.setText(result.title + " " + result.artist);
                     content.addView(query);
-                    Button find = button("Tìm và nghe bản nhạc này");
-                    content.addView(find);
+                    ImageButton find = iconButton(R.drawable.ic_search, "Tìm bài hát đã nhận diện");
+                    content.addView(find, new LinearLayout.LayoutParams(dp(56), dp(56)));
                     find.setOnClickListener(v -> searchRecognized(result.title));
                 });
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     createShell("Nhận diện bài hát");
                     addLabel(content, "Nhận diện thất bại: " + e.getMessage(), 15, Color.LTGRAY);
-                    Button retry = button("Thử lại");
-                    content.addView(retry);
+                    ImageButton retry = iconButton(R.drawable.ic_retry, "Thử nhận diện lại");
+                    content.addView(retry, new LinearLayout.LayoutParams(dp(56), dp(56)));
                     retry.setOnClickListener(v -> requestAndIdentify());
                 });
             }
@@ -725,12 +761,17 @@ public class MainActivity extends AppCompatActivity {
         return label;
     }
 
-    private Button button(String text) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setTextColor(Color.rgb(1, 1, 1));
-        button.setAllCaps(false);
+    private ImageButton iconButton(int icon, String description) {
+        ImageButton button = new ImageButton(this);
+        button.setImageResource(icon);
+        button.setContentDescription(description);
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        button.setPadding(dp(14), dp(14), dp(14), dp(14));
         button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(215, 250, 0)));
+        button.setImageTintList(android.content.res.ColorStateList.valueOf(Color.rgb(1, 1, 1)));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(52), dp(52));
+        params.setMargins(dp(5), dp(5), dp(5), dp(5));
+        button.setLayoutParams(params);
         return button;
     }
 

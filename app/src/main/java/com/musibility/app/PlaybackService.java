@@ -17,7 +17,6 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,6 +42,7 @@ public class PlaybackService extends Service {
     private boolean preparing;
     private boolean fallbackAttempted;
     private boolean fallbackInProgress;
+    private String lastPlaybackError = "";
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
             publishState();
@@ -71,6 +71,7 @@ public class PlaybackService extends Service {
             shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false);
             fallbackAttempted = false;
             fallbackInProgress = false;
+            lastPlaybackError = "";
             playCurrent();
         } else if (ACTION_TOGGLE.equals(action)) {
             if (player == null && currentIndex < 0) {
@@ -102,6 +103,8 @@ public class PlaybackService extends Service {
         }
         Song song = queue.get(currentIndex);
         if (song.audioUrl.isEmpty()) {
+            preparing = false;
+            lastPlaybackError = "Bài hát này chưa có đường dẫn phát.";
             publishState();
             return;
         }
@@ -126,7 +129,7 @@ public class PlaybackService extends Service {
                 preparing = false;
                 Log.e("Musibility", "Playback error: " + what + "/" + extra);
                 if ("Audius".equals(song.provider) && !fallbackAttempted) tryJamendoFallback(song);
-                else playNext(true);
+                else handlePlaybackFailure("Không phát được bài hát này. Hãy thử bài khác hoặc kiểm tra kết nối.");
                 return true;
             });
             player.prepareAsync();
@@ -135,7 +138,7 @@ public class PlaybackService extends Service {
             preparing = false;
             Log.e("Musibility", "Could not start playback", e);
             if ("Audius".equals(song.provider) && !fallbackAttempted) tryJamendoFallback(song);
-            else publishState();
+            else handlePlaybackFailure("Không thể bắt đầu phát bài hát này.");
         }
     }
 
@@ -156,8 +159,7 @@ public class PlaybackService extends Service {
                         break;
                     }
                 }
-                if (fallback == null && !candidates.isEmpty()) fallback = candidates.get(0);
-                if (fallback == null) failure = new java.io.IOException("Không tìm thấy bản thay thế trên Jamendo.");
+                if (fallback == null) failure = new java.io.IOException("Không tìm thấy cùng bài hát trên Jamendo.");
             } catch (Exception e) {
                 failure = e;
             }
@@ -172,10 +174,17 @@ public class PlaybackService extends Service {
                     playCurrent();
                 } else {
                     Log.w("Musibility", "Jamendo fallback unavailable", fallbackFailure);
-                    playNext(true);
+                    handlePlaybackFailure("Không phát được bài hát trên Audius và không tìm thấy bản thay thế trên Jamendo.");
                 }
             });
         });
+    }
+
+    private void handlePlaybackFailure(String message) {
+        preparing = false;
+        releasePlayer();
+        lastPlaybackError = message;
+        publishState();
     }
 
     private String normalize(String value) {
@@ -195,6 +204,7 @@ public class PlaybackService extends Service {
         }
         fallbackAttempted = false;
         fallbackInProgress = false;
+        lastPlaybackError = "";
         playCurrent();
     }
 
@@ -232,6 +242,8 @@ public class PlaybackService extends Service {
         state.putExtra("playing", isPlaying);
         state.putExtra("position", position);
         state.putExtra("duration", duration);
+        state.putExtra("error", lastPlaybackError);
+        lastPlaybackError = "";
         sendBroadcast(state);
         MusicWidgetProvider.refresh(this);
         if (song != null) updateNotification();
