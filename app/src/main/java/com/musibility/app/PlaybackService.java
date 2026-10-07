@@ -6,8 +6,6 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -16,6 +14,12 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+
+import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
 
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -37,7 +41,7 @@ public class PlaybackService extends Service {
     private final ExecutorService fallbackWorker = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler();
     private final ArrayList<Song> queue = new ArrayList<>();
-    private MediaPlayer player;
+    private ExoPlayer player;
     private int currentIndex = -1;
     private boolean shuffle;
     private boolean preparing;
@@ -63,16 +67,25 @@ public class PlaybackService extends Service {
                 : notification(activeSong.title, activeSong.artist));
         String action = intent.getAction();
         if (ACTION_PLAY.equals(action)) {
+            intent.setExtrasClassLoader(Song.class.getClassLoader());
             Object value = intent.getSerializableExtra(EXTRA_QUEUE);
-            if (value instanceof ArrayList<?>) {
-                queue.clear();
-                for (Object item : (ArrayList<?>) value) if (item instanceof Song) queue.add((Song) item);
+            if (!(value instanceof ArrayList<?>)) {
+                currentIndex = -1;
+                handlePlaybackFailure("Không thể tải danh sách bài hát để phát.");
+                return START_NOT_STICKY;
             }
+            queue.clear();
+            for (Object item : (ArrayList<?>) value) if (item instanceof Song) queue.add((Song) item);
             currentIndex = intent.getIntExtra(EXTRA_INDEX, 0);
             shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false);
             fallbackAttempted = false;
             fallbackInProgress = false;
             lastPlaybackError = "";
+            if (queue.isEmpty() || currentIndex < 0 || currentIndex >= queue.size()) {
+                currentIndex = -1;
+                handlePlaybackFailure("Danh sách phát trống hoặc bài hát được chọn không hợp lệ.");
+                return START_NOT_STICKY;
+            }
             playCurrent();
         } else if (ACTION_TOGGLE.equals(action)) {
             if (player == null && currentIndex < 0) {
@@ -81,7 +94,7 @@ public class PlaybackService extends Service {
                 return START_NOT_STICKY;
             }
             if (player != null && player.isPlaying()) player.pause();
-            else if (player != null && !preparing) player.start();
+            else if (player != null) player.play();
             else if (player == null && currentIndex >= 0) playCurrent();
             publishState();
         } else if (ACTION_NEXT.equals(action)) {
@@ -103,45 +116,53 @@ public class PlaybackService extends Service {
             return;
         }
         Song song = queue.get(currentIndex);
+        releasePlayer();
         if (song.audioUrl.isEmpty()) {
             preparing = false;
             lastPlaybackError = "Bài hát này chưa có đường dẫn phát.";
             publishState();
             return;
         }
-        releasePlayer();
         preparing = true;
         try {
-            player = new MediaPlayer();
-            player.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
+            player = new ExoPlayer.Builder(this).build();
+            player.setAudioAttributes(AudioAttributes.DEFAULT, true);
+            player.setHandleAudioBecomingNoisy(true);
+            player.addListener(new Player.Listener() {
+                @Override public void onPlaybackStateChanged(int playbackState) {
+                    preparing = playbackState == Player.STATE_BUFFERING;
+                    if (playbackState == Player.STATE_READY) {
+                        updateNotification();
+                        handler.removeCallbacks(ticker);
+                        handler.post(ticker);
+                    } else if (playbackState == Player.STATE_ENDED) {
+                        playNext(true);
+                    }
+                    publishState();
+                }
+
+                @Override public void onPlayerError(PlaybackException error) {
+                    preparing = false;
+                    Log.e("Musibility", "Playback error: " + error.errorCode, error);
+                    if ("Audius".equals(song.provider) && !fallbackAttempted) {
+                        tryJamendoFallback(song);
+                    } else {
+                        handlePlaybackFailure("Không phát được bài hát này ("
+                                + error.errorCode + "). Hãy thử bài khác hoặc kiểm tra kết nối.");
+                    }
+                }
+            });
             Uri source = Uri.parse(song.audioUrl);
-            if ("content".equals(source.getScheme())) player.setDataSource(this, source);
-            else player.setDataSource(song.audioUrl);
-            player.setOnPreparedListener(mp -> {
-                preparing = false;
-                mp.start();
-                updateNotification();
-                publishState();
-                handler.removeCallbacks(ticker);
-                handler.post(ticker);
-            });
-            player.setOnCompletionListener(mp -> playNext(true));
-            player.setOnErrorListener((mp, what, extra) -> {
-                preparing = false;
-                Log.e("Musibility", "Playback error: " + what + "/" + extra);
-                if ("Audius".equals(song.provider) && !fallbackAttempted) tryJamendoFallback(song);
-                else handlePlaybackFailure("Không phát được bài hát này. Hãy thử bài khác hoặc kiểm tra kết nối.");
-                return true;
-            });
-            player.prepareAsync();
+            player.setMediaItem(MediaItem.fromUri(source));
+            player.prepare();
+            player.play();
             publishState();
         } catch (Exception e) {
             preparing = false;
             Log.e("Musibility", "Could not start playback", e);
             if ("Audius".equals(song.provider) && !fallbackAttempted) tryJamendoFallback(song);
-            else handlePlaybackFailure("Không thể bắt đầu phát bài hát này.");
+            else handlePlaybackFailure("Không thể bắt đầu phát bài hát này: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
     }
 
@@ -177,7 +198,10 @@ public class PlaybackService extends Service {
                     playCurrent();
                 } else {
                     Log.w("Musibility", "Jamendo fallback unavailable", fallbackFailure);
-                    handlePlaybackFailure("Không phát được bài hát trên Audius và không tìm thấy bản thay thế trên Jamendo.");
+                    String reason = fallbackFailure == null || fallbackFailure.getMessage() == null
+                            ? "" : " " + fallbackFailure.getMessage();
+                    handlePlaybackFailure("Không phát được bài hát trên Audius và không tìm thấy bản thay thế trên Jamendo."
+                            + reason);
                 }
             });
         });
@@ -214,7 +238,7 @@ public class PlaybackService extends Service {
     private void releasePlayer() {
         handler.removeCallbacks(ticker);
         if (player != null) {
-            try { player.reset(); player.release(); } catch (Exception e) {
+            try { player.release(); } catch (Exception e) {
                 Log.w("Musibility", "Could not release player", e);
             }
             player = null;
@@ -227,7 +251,10 @@ public class PlaybackService extends Service {
         int position = 0;
         int duration = 0;
         if (player != null) {
-            try { position = player.getCurrentPosition(); duration = player.getDuration(); }
+            try {
+                position = (int) Math.max(0, player.getCurrentPosition());
+                duration = (int) Math.max(0, player.getDuration());
+            }
             catch (IllegalStateException ignored) { }
         }
         getSharedPreferences("musibility_widget", MODE_PRIVATE).edit()

@@ -40,6 +40,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -57,7 +58,6 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final int AUDIO_PERMISSION = 41;
-    private static final int LOCATION_PERMISSION = 42;
     private static final int AUDIO_LIBRARY_PERMISSION = 43;
     private final ExecutorService worker = Executors.newFixedThreadPool(3);
     private final Handler mainHandler = new Handler();
@@ -68,11 +68,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean shuffle;
     private boolean currentQueueIsPlaylist;
     private Song pendingLocationSong;
+    private boolean returningFromMap;
     private String currentScreen = "discover";
-    private TextView playerPlayButton;
+    private ImageButton playerPlayButton;
     private TextView playerTime;
     private SeekBar playerSeekBar;
     private TextView lyricsText;
+    private OnBackPressedCallback backToDiscoverCallback;
     private int screenGeneration;
     private List<String> lyricLines = new ArrayList<>();
     private List<Long> lyricTimes = new ArrayList<>();
@@ -107,7 +109,10 @@ public class MainActivity extends AppCompatActivity {
                 if ("player".equals(currentScreen)) showPlayer();
             }
             boolean playing = intent.getBooleanExtra("playing", false);
-            if (playerPlayButton != null) playerPlayButton.setText(playing ? "Ⅱ" : "▶");
+            if (playerPlayButton != null) {
+                playerPlayButton.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
+                playerPlayButton.setContentDescription(playing ? "Tạm dừng" : "Phát");
+            }
             if (playerSeekBar != null) {
                 int duration = intent.getIntExtra("duration", 0);
                 int position = intent.getIntExtra("position", 0);
@@ -118,6 +123,10 @@ public class MainActivity extends AppCompatActivity {
                 playerTime.setText(formatTime(intent.getIntExtra("position", 0) / 1000)
                         + " / " + formatTime(intent.getIntExtra("duration", 0) / 1000));
             }
+            String error = intent.getStringExtra("error");
+            if (error != null && !error.isEmpty()) {
+                Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+            }
         }
     };
 
@@ -127,7 +136,21 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setNavigationBarColor(Color.rgb(1, 1, 1));
         IntentFilter filter = new IntentFilter(PlaybackService.ACTION_STATE);
         ContextCompat.registerReceiver(this, playbackReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        backToDiscoverCallback = new OnBackPressedCallback(false) {
+            @Override public void handleOnBackPressed() {
+                showDiscover();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, backToDiscoverCallback);
         showDiscover();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (returningFromMap) {
+            returningFromMap = false;
+            showDiscover();
+        }
     }
 
     @Override protected void onDestroy() {
@@ -139,6 +162,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void createShell(String title) {
         screenGeneration++;
+        if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(true);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(1, 1, 1));
@@ -187,25 +211,18 @@ public class MainActivity extends AppCompatActivity {
     private void showDiscover() {
         currentScreen = "discover";
         createShell("Musibility");
+        if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(false);
         addLabel(content, "Tìm nhạc, nghệ sĩ, playlist", 15, Color.LTGRAY);
         EditText search = new EditText(this);
         search.setSingleLine(true);
-        search.setHint("Tên bài hát hoặc nghệ sĩ");
+        search.setHint("Tên bài hát, nghệ sĩ hoặc playlist");
         search.setHintTextColor(Color.GRAY);
         search.setTextColor(Color.WHITE);
         search.setInputType(InputType.TYPE_CLASS_TEXT);
         content.addView(search, matchWrap());
-        LinearLayout actions = new LinearLayout(this);
-        Button tracks = button("Tìm bài hát");
-        Button artist = button("Tìm nghệ sĩ");
-        Button playlists = button("Playlist nghệ sĩ");
-        actions.addView(tracks, new LinearLayout.LayoutParams(0, -2, 1));
-        actions.addView(artist, new LinearLayout.LayoutParams(0, -2, 1));
-        actions.addView(playlists, new LinearLayout.LayoutParams(0, -2, 1));
-        content.addView(actions);
-        tracks.setOnClickListener(v -> searchTracks(search.getText().toString()));
-        artist.setOnClickListener(v -> searchArtists(search.getText().toString()));
-        playlists.setOnClickListener(v -> searchPlaylists(search.getText().toString()));
+        Button searchButton = button("Tìm kiếm");
+        content.addView(searchButton, matchWrap());
+        searchButton.setOnClickListener(v -> searchAll(search.getText().toString()));
         Button chart = button("🔥  Những bài được nghe nhiều");
         content.addView(chart, matchWrap());
         chart.setOnClickListener(v -> loadChart());
@@ -231,61 +248,93 @@ public class MainActivity extends AppCompatActivity {
         runAsync(MusicCatalog::trending, this::addSongs);
     }
 
-    private void searchTracks(String query) {
+    private void searchAll(String query) {
         if (query.trim().isEmpty()) return;
         screenGeneration++;
+        if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(true);
         content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
+        Button back = button("← Khám phá");
         content.addView(back, matchWrap());
         back.setOnClickListener(v -> showDiscover());
-        addLabel(content, "Kết quả bài hát", 20, Color.WHITE);
-        runAsync(() -> MusicCatalog.searchTracks(query), this::addSongs);
+        addLabel(content, "Đang tìm bài hát, nghệ sĩ và playlist…", 14, Color.LTGRAY);
+        runAsync(() -> {
+            SearchResults results = new SearchResults();
+            try { results.songs = MusicCatalog.searchTracks(query); }
+            catch (Exception e) { results.songError = e.getMessage(); }
+            try { results.artists = MusicCatalog.searchArtists(query); }
+            catch (Exception e) { results.artistError = e.getMessage(); }
+            try { results.playlists = MusicCatalog.searchPlaylists(query); }
+            catch (Exception e) { results.playlistError = e.getMessage(); }
+            return results;
+        }, results -> renderSearchResults(query, results));
     }
 
-    private void searchArtists(String query) {
-        if (query.trim().isEmpty()) return;
-        screenGeneration++;
+    private void renderSearchResults(String query, SearchResults results) {
         content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
+        Button back = button("← Khám phá");
         content.addView(back, matchWrap());
         back.setOnClickListener(v -> showDiscover());
-        addLabel(content, "Nghệ sĩ phù hợp", 20, Color.WHITE);
-        runAsync(() -> MusicCatalog.searchArtists(query), artists -> {
-            for (JSONObject artist : artists) {
+
+        addLabel(content, "Bài hát", 20, Color.WHITE);
+        if (results.songs != null && !results.songs.isEmpty()) renderSongs(results.songs, false);
+        else addLabel(content, results.songError == null ? "Không tìm thấy bài hát."
+                : "Không tải được bài hát: " + results.songError, 14, Color.GRAY);
+
+        addLabel(content, "Nghệ sĩ", 20, Color.WHITE);
+        if (results.artists != null && !results.artists.isEmpty()) {
+            for (JSONObject artist : results.artists) {
                 String artistId = artist.optString("_sourceId", artist.optString("id"));
-                String provider = artist.optString("_provider", "Audius");
-                String artistName = artist.optString("name");
                 if (artistId.isEmpty()) continue;
-                Button result = button("♪  " + artistName + "  ·  Xem bài hát");
-                content.addView(result, matchWrap());
-                result.setOnClickListener(v -> showArtist(artistName, artistId, provider));
+                String name = artist.optString("name");
+                String provider = artist.optString("_provider", "Audius");
+                Button item = button("♪  " + name + "  ·  Xem bài hát");
+                content.addView(item, matchWrap());
+                item.setOnClickListener(v -> showArtist(name, artistId, provider));
             }
-            if (artists.isEmpty()) addLabel(content, "Không tìm thấy nghệ sĩ.", 14, Color.GRAY);
-        });
-    }
+        } else {
+            addLabel(content, results.artistError == null ? "Không tìm thấy nghệ sĩ."
+                    : "Không tải được nghệ sĩ: " + results.artistError, 14, Color.GRAY);
+        }
 
-    private void searchPlaylists(String query) {
-        if (query.trim().isEmpty()) return;
-        screenGeneration++;
-        content.removeAllViews();
-        Button back = button("← Quay lại tìm kiếm");
-        content.addView(back, matchWrap());
-        back.setOnClickListener(v -> showDiscover());
         addLabel(content, "Playlist và album", 20, Color.WHITE);
-        runAsync(() -> MusicCatalog.searchPlaylists(query), albums -> {
-            for (JSONObject album : albums) {
+        if (results.playlists != null && !results.playlists.isEmpty()) {
+            for (JSONObject album : results.playlists) {
                 String name = album.optString("playlist_name",
                         album.optString("name", album.optString("title")));
                 JSONObject owner = album.optJSONObject("user");
                 String ownerName = owner == null ? album.optString("artist_name") : owner.optString("name");
                 Button item = button("♫  " + name + (ownerName.isEmpty() ? "" : "  ·  " + ownerName));
                 content.addView(item, matchWrap());
-                item.setOnClickListener(v -> runAsync(() -> MusicCatalog.playlistTracks(
-                                album.optString("_sourceId", album.optString("id")),
-                                album.optString("_provider", "Audius"), name), this::addPlaylistSongs));
+                item.setOnClickListener(v -> {
+                    content.removeAllViews();
+                    Button returnToResults = button("← Kết quả tìm kiếm");
+                    content.addView(returnToResults, matchWrap());
+                    returnToResults.setOnClickListener(backView -> searchAll(query));
+                    addLabel(content, name, 20, Color.WHITE);
+                    runAsync(() -> MusicCatalog.playlistTracks(
+                                    album.optString("_sourceId", album.optString("id")),
+                                    album.optString("_provider", "Audius"), name),
+                            this::addPlaylistSongs);
+                });
             }
-            if (albums.isEmpty()) addLabel(content, "Không tìm thấy playlist.", 14, Color.GRAY);
-        });
+        } else {
+            addLabel(content, results.playlistError == null ? "Không tìm thấy playlist."
+                    : "Không tải được playlist: " + results.playlistError, 14, Color.GRAY);
+        }
+
+        if (results.songs.isEmpty() && results.artists.isEmpty() && results.playlists.isEmpty()
+                && results.songError == null && results.artistError == null && results.playlistError == null) {
+            addLabel(content, "Không tìm thấy kết quả phù hợp.", 14, Color.GRAY);
+        }
+    }
+
+    private static final class SearchResults {
+        List<Song> songs = new ArrayList<>();
+        List<JSONObject> artists = new ArrayList<>();
+        List<JSONObject> playlists = new ArrayList<>();
+        String songError;
+        String artistError;
+        String playlistError;
     }
 
     private void showArtist(String name, String artistId, String provider) {
@@ -341,18 +390,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startQueue(List<Song> songs, int index, boolean playlistQueue) {
-        if (songs.isEmpty()) return;
+        if (index < 0 || index >= songs.size()) return;
         queue.clear();
         queue.addAll(songs);
         currentQueueIsPlaylist = playlistQueue;
         currentSong = queue.get(index);
-        MusicData.recordPlay(this, currentSong, getLastLocation());
         Intent intent = new Intent(this, PlaybackService.class).setAction(PlaybackService.ACTION_PLAY);
         intent.putExtra(PlaybackService.EXTRA_QUEUE, new ArrayList<>(queue));
         intent.putExtra(PlaybackService.EXTRA_INDEX, index);
         intent.putExtra(PlaybackService.EXTRA_SHUFFLE, shuffle);
-        startPlaybackService(intent);
         showPlayer();
+        MusicData.recordPlay(this, currentSong, getLastLocation());
+        startPlaybackService(intent);
     }
 
     private void startPlaybackService(Intent intent) {
@@ -415,9 +464,9 @@ public class MainActivity extends AppCompatActivity {
         });
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
-        Button previous = button("|◀");
-        playerPlayButton = button("▶");
-        Button next = button("▶|");
+        ImageButton previous = iconButton(R.drawable.ic_previous, "Bài trước");
+        playerPlayButton = iconButton(R.drawable.ic_play, "Phát");
+        ImageButton next = iconButton(R.drawable.ic_next, "Bài tiếp theo");
         controls.addView(previous); controls.addView(playerPlayButton); controls.addView(next);
         content.addView(controls);
         previous.setOnClickListener(v -> sendPlaybackAction(PlaybackService.ACTION_PREVIOUS));
@@ -425,16 +474,19 @@ public class MainActivity extends AppCompatActivity {
         playerPlayButton.setOnClickListener(v -> sendPlaybackAction(PlaybackService.ACTION_TOGGLE));
         LinearLayout options = new LinearLayout(this);
         options.setGravity(Gravity.CENTER);
-        Button add = button("＋ Playlist");
-        Button share = button("Chia sẻ");
-        Button lyrics = button("Lời bài hát");
+        ImageButton add = iconButton(R.drawable.ic_add_playlist, "Thêm vào playlist");
+        ImageButton share = iconButton(R.drawable.ic_share, "Chia sẻ");
+        ImageButton lyrics = iconButton(R.drawable.ic_lyrics, "Lời bài hát");
         options.addView(add); options.addView(share); options.addView(lyrics);
         content.addView(options);
         add.setOnClickListener(v -> choosePlaylist());
         share.setOnClickListener(v -> shareSong());
         lyrics.setOnClickListener(v -> showLyrics());
         if (currentQueueIsPlaylist) {
-            Button shuffleButton = button(shuffle ? "🔀 Đang bật tráo bài" : "🔀 Tráo bài trong playlist");
+            ImageButton shuffleButton = iconButton(R.drawable.ic_shuffle,
+                    shuffle ? "Tắt tráo bài" : "Bật tráo bài");
+            shuffleButton.setImageTintList(android.content.res.ColorStateList.valueOf(
+                    shuffle ? Color.rgb(215, 250, 0) : Color.LTGRAY));
             content.addView(shuffleButton);
             shuffleButton.setOnClickListener(v -> {
                 shuffle = !shuffle;
@@ -448,7 +500,10 @@ public class MainActivity extends AppCompatActivity {
             android.content.SharedPreferences state = getSharedPreferences("musibility_widget", MODE_PRIVATE);
             boolean playing = state.getBoolean("playing", false);
             mainHandler.post(() -> {
-                if (playerPlayButton != null) playerPlayButton.setText(playing ? "Ⅱ" : "▶");
+                if (playerPlayButton != null) {
+                    playerPlayButton.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
+                    playerPlayButton.setContentDescription(playing ? "Tạm dừng" : "Phát");
+                }
             });
         });
     }
@@ -821,19 +876,20 @@ public class MainActivity extends AppCompatActivity {
         if (BuildConfig.GOOGLE_MAPS_KEY.isEmpty()) {
             new AlertDialog.Builder(this).setTitle("Cần Google Maps API key")
                     .setMessage("Thêm google.maps.key=YOUR_KEY vào local.properties và bật Maps SDK for Android trong Google Cloud Console.")
-                    .setPositiveButton("Mở bản đồ", (d, w) -> startActivity(new Intent(this, MapActivity.class)))
+                    .setPositiveButton("Mở bản đồ", (d, w) -> launchMap())
                     .setNegativeButton("Đóng", null).show();
-        } else startActivity(new Intent(this, MapActivity.class));
+        } else launchMap();
+    }
+
+    private void launchMap() {
+        returningFromMap = true;
+        startActivity(new Intent(this, MapActivity.class));
     }
 
     private Location getLastLocation() {
         if (Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            if (currentScreen.equals("player") || currentScreen.equals("discover")) {
-                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION);
-            }
             return null;
         }
         try {
@@ -883,11 +939,6 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == AUDIO_LIBRARY_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) showDownloads();
             else Toast.makeText(this, "Cần quyền đọc âm thanh để hiển thị nhạc trên thiết bị.", Toast.LENGTH_LONG).show();
-        }
-        if (requestCode == LOCATION_PERMISSION && currentSong != null
-                && (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
-            MusicData.recordLocation(this, currentSong, getLastLocation());
         }
     }
 
@@ -954,6 +1005,18 @@ public class MainActivity extends AppCompatActivity {
         button.setTextColor(Color.rgb(1, 1, 1));
         button.setAllCaps(false);
         button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(215, 250, 0)));
+        return button;
+    }
+
+    private ImageButton iconButton(int icon, String description) {
+        ImageButton button = new ImageButton(this);
+        button.setImageResource(icon);
+        button.setImageTintList(android.content.res.ColorStateList.valueOf(Color.rgb(215, 250, 0)));
+        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setContentDescription(description);
+        button.setPadding(dp(12), dp(12), dp(12), dp(12));
+        button.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        button.setLayoutParams(new LinearLayout.LayoutParams(dp(56), dp(56)));
         return button;
     }
 

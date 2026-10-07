@@ -27,16 +27,17 @@
 
 ## Tính năng
 
-- Tìm bài hát, nghệ sĩ và playlist; xem các bài nổi bật của nghệ sĩ.
+- Tìm bài hát, nghệ sĩ và playlist trong một lần tìm kiếm; xem các bài nổi bật của nghệ sĩ.
 - Bảng bài phổ biến và gợi ý theo nghệ sĩ từ lịch sử nghe gần đây.
 - Audius là nguồn chính; nếu tìm kiếm không dùng được hoặc Audius stream gặp lỗi, app tự tìm và phát bản thay thế từ Jamendo khi đã cấu hình Jamendo client ID.
-- Duyệt và phát nhạc đã tải/lưu trên thiết bị từ tab **Tải về**. Chọn một bài trong danh sách để phát; dùng **Làm mới thư viện** sau khi tải thêm nhạc.
+- Chạm một bài trong danh sách chọn bài để tự động phát và mở giao diện **Đang phát**. Duyệt và phát nhạc đã tải/lưu trên thiết bị từ tab **Tải về**; dùng **Làm mới thư viện** sau khi tải thêm nhạc.
 - Màn hình phát hiển thị ảnh bìa và metadata đọc được từ tệp nhạc: nghệ sĩ album, thể loại, năm phát hành, số thứ tự, thời lượng, tên và thư mục tệp, định dạng, dung lượng, bitrate. Trường nào không có trong tệp sẽ được bỏ qua.
+- Giao diện phát nhạc dùng icon cho các nút điều khiển, thêm playlist, chia sẻ và lời bài hát. Nút Back của điện thoại từ các giao diện trong app sẽ quay về **Khám phá**.
 - Tạo playlist cá nhân, phát playlist/album, phát/dừng, tua, chuyển bài, tráo bài, chia sẻ đường dẫn; widget màn hình chính có ảnh bìa, tiến trình và điều khiển.
 - Jamendo fallback chỉ chọn track có URL audio và thông tin giấy phép Creative Commons; giấy phép có liên kết từ màn hình phát.
 - Lời bài hát từ LRCLIB khi có dữ liệu, đồng bộ khi nguồn cung cấp timed lyrics.
 - Nhận diện âm thanh bằng microphone và ACRCloud nếu người dùng tự cấu hình. Android không cho ứng dụng thông thường đọc trực tiếp âm thanh nội bộ đang phát qua loa; hướng microphone về nguồn âm thanh bên ngoài.
-- Lưu vị trí nghe tùy chọn và hiển thị trên Google Maps nếu người dùng cấp quyền và cấu hình Maps.
+- Lưu vị trí nghe tùy chọn và hiển thị trên Google Maps nếu người dùng cấp quyền và cấu hình Maps. Phát nhạc không yêu cầu quyền vị trí; quyền này được hỏi khi dùng bản đồ.
 
 ### Nghe nhạc đã tải về
 
@@ -46,4 +47,4 @@
 
 ## Dữ liệu và quyền riêng tư
 
-Lịch sử, playlist và vị trí nghe được lưu cục bộ trên thiết bị. Thư viện nhạc trên thiết bị chỉ được đọc sau khi người dùng cấp quyền âm thanh (Android 13 trở lên yêu cầu quyền nhạc/âm thanh; phiên bản cũ hơn dùng quyền đọc bộ nhớ); ứng dụng không tải tệp nhạc lên. Tìm kiếm/stream Audius được gửi tới API Audius; chỉ khi fallback mới gọi Jamendo. Lời bài hát được lấy từ LRCLIB. Âm thanh thu chỉ được gửi tới ACRCloud khi người dùng chủ động chạy nhận diện.
+Lịch sử, playlist và vị trí nghe (nếu đã cấp quyền vị trí) được lưu cục bộ trên thiết bị. Phát nhạc không yêu cầu quyền vị trí; bản đồ sẽ hỏi quyền này khi cần. Thư viện nhạc trên thiết bị chỉ được đọc sau khi người dùng cấp quyền âm thanh (Android 13 trở lên yêu cầu quyền nhạc/âm thanh; phiên bản cũ hơn dùng quyền đọc bộ nhớ); ứng dụng không tải tệp nhạc lên. Tìm kiếm/stream Audius được gửi tới API Audius; chỉ khi fallback mới gọi Jamendo. Lời bài hát được lấy từ LRCLIB. Âm thanh thu chỉ được gửi tới ACRCloud khi người dùng chủ động chạy nhận diện.
