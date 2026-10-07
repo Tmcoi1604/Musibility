@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -115,7 +116,9 @@ public class PlaybackService extends Service {
             player.setAudioAttributes(new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
-            player.setDataSource(song.audioUrl);
+            Uri source = Uri.parse(song.audioUrl);
+            if ("content".equals(source.getScheme())) player.setDataSource(this, source);
+            else player.setDataSource(song.audioUrl);
             player.setOnPreparedListener(mp -> {
                 preparing = false;
                 mp.start();
