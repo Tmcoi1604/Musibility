@@ -26,6 +26,7 @@
 
 ## Tính năng
 
+- Trang **Khám phá** chia nội dung thành các thẻ tìm kiếm, truy cập nhanh, nhạc thịnh hành và đề xuất; bài hát hiển thị dạng thẻ cuộn ngang.
 - Tìm bài hát, nghệ sĩ và playlist trong một lần tìm kiếm; xem các bài nổi bật của nghệ sĩ.
 - Bảng bài phổ biến và gợi ý theo nghệ sĩ từ lịch sử nghe gần đây.
 - Audius là nguồn chính; nếu tìm kiếm không dùng được hoặc Audius stream gặp lỗi, app tự tìm và phát bản thay thế từ Jamendo khi đã cấu hình Jamendo client ID.

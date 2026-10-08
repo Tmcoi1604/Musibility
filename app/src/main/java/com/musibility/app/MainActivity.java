@@ -35,6 +35,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -297,19 +298,31 @@ public class MainActivity extends AppCompatActivity {
 
     private void showDiscover() {
         currentScreen = "discover";
-        createShell("Musibility");
+        createShell("Khám phá");
         if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(false);
-        addLabel(content, "Tìm nhạc, nghệ sĩ, playlist", 15, Color.LTGRAY);
+        LinearLayout searchCard = discoverPanel(new int[]{Color.rgb(43, 55, 96), Color.rgb(42, 32, 72)});
+        TextView heading = addLabel(searchCard, "Âm nhạc của bạn", 23, Color.WHITE);
+        heading.setTypeface(null, Typeface.BOLD);
+        addLabel(searchCard, "Tìm bài hát, nghệ sĩ hoặc playlist", 14, Color.rgb(220, 220, 235));
         EditText search = new EditText(this);
         search.setSingleLine(true);
-        search.setHint("Tên bài hát, nghệ sĩ hoặc playlist");
+        search.setHint("Bạn muốn nghe gì?");
         search.setHintTextColor(Color.GRAY);
-        search.setTextColor(Color.WHITE);
+        search.setTextColor(Color.rgb(20, 20, 30));
         search.setInputType(InputType.TYPE_CLASS_TEXT);
         search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-        content.addView(search, matchWrap());
-        Button searchButton = button("Tìm kiếm");
-        content.addView(searchButton, matchWrap());
+        search.setPadding(dp(14), 0, dp(10), 0);
+        search.setBackground(searchFieldBackground());
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        searchRow.addView(search, new LinearLayout.LayoutParams(0, dp(50), 1));
+        ImageButton searchButton = iconButton(R.drawable.ic_search, "Tìm kiếm");
+        searchButton.setBackground(searchFieldBackground());
+        LinearLayout.LayoutParams searchButtonParams = new LinearLayout.LayoutParams(dp(50), dp(50));
+        searchButtonParams.setMargins(dp(8), 0, 0, 0);
+        searchRow.addView(searchButton, searchButtonParams);
+        searchCard.addView(searchRow, matchWrap());
+        content.addView(searchCard, matchWrap());
         View.OnClickListener submitSearch = v -> searchAll(search.getText().toString());
         searchButton.setOnClickListener(submitSearch);
         search.setOnEditorActionListener((view, actionId, event) -> {
@@ -324,28 +337,164 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
-        Button chart = button("🔥  Những bài được nghe nhiều");
-        content.addView(chart, matchWrap());
-        chart.setOnClickListener(v -> loadChart());
-        addLabel(content, "Đề xuất từ lịch sử nghe", 20, Color.WHITE);
+
+        TextView shortcutsHeading = addLabel(content, "Truy cập nhanh", 18, Color.WHITE);
+        shortcutsHeading.setTypeface(null, Typeface.BOLD);
+        LinearLayout shortcuts = new LinearLayout(this);
+        shortcuts.setOrientation(LinearLayout.HORIZONTAL);
+        shortcuts.addView(discoverShortcut("Bảng xếp hạng", "♫",
+                new int[]{Color.rgb(132, 62, 103), Color.rgb(84, 44, 94)}, this::loadChart));
+        shortcuts.addView(discoverShortcut("Nhạc đã tải", "↓",
+                new int[]{Color.rgb(42, 104, 103), Color.rgb(29, 76, 91)}, this::showDownloads));
+        shortcuts.addView(discoverShortcut("Playlist", "≡",
+                new int[]{Color.rgb(159, 104, 49), Color.rgb(115, 73, 43)}, this::showPlaylists));
+        content.addView(shortcuts, matchWrap());
+
+        LinearLayout chartPanel = discoverPanel(new int[]{Color.rgb(35, 61, 77), Color.rgb(31, 40, 65)});
+        TextView chartHeading = addLabel(chartPanel, "Đang thịnh hành", 19, Color.WHITE);
+        chartHeading.setTypeface(null, Typeface.BOLD);
+        addLabel(chartPanel, "Những bài được nghe nhiều", 13, Color.rgb(194, 210, 220));
+        LinearLayout chartCards = new LinearLayout(this);
+        chartCards.setOrientation(LinearLayout.HORIZONTAL);
+        chartPanel.addView(chartCards, matchWrap());
+        content.addView(chartPanel, matchWrap());
+
+        LinearLayout recommendations = discoverPanel(new int[]{Color.rgb(70, 45, 84), Color.rgb(45, 38, 76)});
+        TextView recommendationTitle = addLabel(recommendations, "Đề xuất cho bạn", 19, Color.WHITE);
+        recommendationTitle.setTypeface(null, Typeface.BOLD);
         List<Song> recent = MusicData.recentSongs(this);
         if (recent.isEmpty()) {
-            addLabel(content, "Phát một vài bài để nhận gợi ý tương tự.", 14, Color.GRAY);
+            addLabel(recommendations, "Nghe một vài bài để nhận gợi ý phù hợp với gu của bạn.",
+                    14, Color.rgb(218, 206, 228));
         } else {
             Song latest = recent.get(0);
+            addLabel(recommendations, "Dựa trên " + latest.artist, 13, Color.rgb(218, 206, 228));
+            LinearLayout recommendationCards = new LinearLayout(this);
+            recommendationCards.setOrientation(LinearLayout.HORIZONTAL);
+            recommendations.addView(recommendationCards, matchWrap());
             runAsync(() -> {
                 List<Song> similar = MusicCatalog.similar(latest);
                 similar.removeIf(song -> song.id == latest.id);
                 return similar;
-            }, list -> {
-                addLabel(content, "Vì bạn đã nghe " + latest.artist, 15, Color.rgb(215, 250, 0));
-                addSongs(list);
-            });
+            }, list -> renderDiscoverSongs(recommendationCards, list));
         }
-        loadChart();
+        content.addView(recommendations, matchWrap());
+        runAsync(MusicCatalog::trending, songs -> renderDiscoverSongs(chartCards, songs));
+    }
+
+    private LinearLayout discoverPanel(int[] colors) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(14), dp(12), dp(14), dp(14));
+        GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors);
+        background.setCornerRadius(dp(20));
+        panel.setBackground(background);
+        LinearLayout.LayoutParams params = matchWrap();
+        params.setMargins(0, 0, 0, dp(16));
+        panel.setLayoutParams(params);
+        return panel;
+    }
+
+    private GradientDrawable searchFieldBackground() {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.WHITE);
+        background.setCornerRadius(dp(14));
+        return background;
+    }
+
+    private View discoverShortcut(String title, String symbol, int[] colors, Runnable action) {
+        LinearLayout shortcut = new LinearLayout(this);
+        shortcut.setOrientation(LinearLayout.VERTICAL);
+        shortcut.setGravity(Gravity.CENTER_VERTICAL);
+        shortcut.setPadding(dp(12), dp(10), dp(12), dp(10));
+        GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors);
+        background.setCornerRadius(dp(16));
+        shortcut.setBackground(background);
+        TextView icon = new TextView(this);
+        icon.setText(symbol);
+        icon.setTextColor(Color.WHITE);
+        icon.setTextSize(22);
+        shortcut.addView(icon);
+        TextView label = new TextView(this);
+        label.setText(title);
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(12);
+        label.setTypeface(null, Typeface.BOLD);
+        label.setMaxLines(1);
+        shortcut.addView(label);
+        shortcut.setContentDescription(title);
+        shortcut.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(82), 1);
+        params.setMargins(dp(3), 0, dp(7), 0);
+        shortcut.setLayoutParams(params);
+        return shortcut;
+    }
+
+    private void renderDiscoverSongs(LinearLayout container, List<Song> songs) {
+        container.removeAllViews();
+        if (songs == null || songs.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("Chưa có bài phù hợp lúc này.");
+            empty.setTextColor(Color.LTGRAY);
+            empty.setTextSize(13);
+            container.addView(empty);
+            return;
+        }
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout cards = new LinearLayout(this);
+        cards.setOrientation(LinearLayout.HORIZONTAL);
+        int[][] palette = {
+                {Color.rgb(65, 69, 116), Color.rgb(47, 48, 86)},
+                {Color.rgb(98, 58, 104), Color.rgb(66, 44, 81)},
+                {Color.rgb(45, 94, 100), Color.rgb(36, 67, 83)},
+                {Color.rgb(123, 82, 54), Color.rgb(82, 57, 50)}
+        };
+        for (int i = 0; i < Math.min(songs.size(), 12); i++) {
+            Song song = songs.get(i);
+            int songIndex = i;
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(8), dp(8), dp(8), dp(10));
+            GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    palette[i % palette.length]);
+            background.setCornerRadius(dp(16));
+            card.setBackground(background);
+            ImageView cover = new ImageView(this);
+            cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            cover.setBackgroundColor(Color.rgb(51, 51, 65));
+            card.addView(cover, new LinearLayout.LayoutParams(dp(126), dp(126)));
+            loadImage(song.coverUrl, cover);
+            TextView title = new TextView(this);
+            title.setText(song.title);
+            title.setTextColor(Color.WHITE);
+            title.setTextSize(13);
+            title.setTypeface(null, Typeface.BOLD);
+            title.setMaxLines(1);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            title.setPadding(0, dp(7), 0, dp(2));
+            card.addView(title);
+            TextView artist = new TextView(this);
+            artist.setText(song.artist);
+            artist.setTextColor(Color.rgb(210, 210, 220));
+            artist.setTextSize(11);
+            artist.setMaxLines(1);
+            artist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            card.addView(artist);
+            card.setContentDescription(song.title + " — " + song.artist);
+            card.setOnClickListener(v -> startQueue(songs, songIndex, false));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+            params.setMargins(0, 0, dp(10), 0);
+            cards.addView(card, params);
+        }
+        scroll.addView(cards);
+        container.addView(scroll, matchWrap());
     }
 
     private void loadChart() {
+        currentScreen = "discover";
+        createShell("Bảng xếp hạng");
+        addLabel(content, "Những bài đang thịnh hành", 16, Color.LTGRAY);
         runAsync(MusicCatalog::trending, this::addSongs);
     }
 
