@@ -2,14 +2,17 @@ package com.musibility.app;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.location.Location;
 import android.location.LocationManager;
@@ -19,10 +22,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.database.Cursor;
+import android.os.Environment;
 import android.media.MediaMetadataRetriever;
 import android.provider.MediaStore;
+import android.view.KeyEvent;
 import android.text.InputType;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.text.SpannableStringBuilder;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
@@ -65,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout root;
     private LinearLayout content;
     private Song currentSong;
+    private ImageView playerCoverImage;
     private boolean shuffle;
     private boolean currentQueueIsPlaylist;
     private Song pendingLocationSong;
@@ -162,6 +169,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void createShell(String title) {
         screenGeneration++;
+        playerCoverImage = null;
+        getWindow().setStatusBarColor(Color.rgb(1, 1, 1));
         if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(true);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -219,10 +228,24 @@ public class MainActivity extends AppCompatActivity {
         search.setHintTextColor(Color.GRAY);
         search.setTextColor(Color.WHITE);
         search.setInputType(InputType.TYPE_CLASS_TEXT);
+        search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         content.addView(search, matchWrap());
         Button searchButton = button("Tìm kiếm");
         content.addView(searchButton, matchWrap());
-        searchButton.setOnClickListener(v -> searchAll(search.getText().toString()));
+        View.OnClickListener submitSearch = v -> searchAll(search.getText().toString());
+        searchButton.setOnClickListener(submitSearch);
+        search.setOnEditorActionListener((view, actionId, event) -> {
+            boolean enterPressed = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_GO
+                    || actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                        .hideSoftInputFromWindow(search.getWindowToken(), 0);
+                submitSearch.onClick(search);
+                return true;
+            }
+            return false;
+        });
         Button chart = button("🔥  Những bài được nghe nhiều");
         content.addView(chart, matchWrap());
         chart.setOnClickListener(v -> loadChart());
@@ -412,15 +435,16 @@ public class MainActivity extends AppCompatActivity {
     private void showPlayer() {
         currentScreen = "player";
         createShell("Đang phát");
+        applyPlayerBackground(null);
         if (currentSong == null) {
             addLabel(content, "Chọn một bài hát trong Khám phá để bắt đầu.", 16, Color.LTGRAY);
             return;
         }
         content.setGravity(Gravity.CENTER_HORIZONTAL);
-        ImageView cover = new ImageView(this);
-        cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        content.addView(cover, new LinearLayout.LayoutParams(dp(270), dp(270)));
-        loadImage(currentSong.coverUrl, cover);
+        playerCoverImage = new ImageView(this);
+        playerCoverImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        content.addView(playerCoverImage, new LinearLayout.LayoutParams(dp(270), dp(270)));
+        loadImage(currentSong.coverUrl, playerCoverImage);
         TextView title = addLabel(content, currentSong.title, 23, Color.WHITE);
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, dp(18), 0, dp(4));
@@ -477,11 +501,13 @@ public class MainActivity extends AppCompatActivity {
         ImageButton add = iconButton(R.drawable.ic_add_playlist, "Thêm vào playlist");
         ImageButton share = iconButton(R.drawable.ic_share, "Chia sẻ");
         ImageButton lyrics = iconButton(R.drawable.ic_lyrics, "Lời bài hát");
-        options.addView(add); options.addView(share); options.addView(lyrics);
+        ImageButton download = iconButton(R.drawable.ic_downloads, "Tải bài hát về máy");
+        options.addView(add); options.addView(share); options.addView(lyrics); options.addView(download);
         content.addView(options);
         add.setOnClickListener(v -> choosePlaylist());
         share.setOnClickListener(v -> shareSong());
         lyrics.setOnClickListener(v -> showLyrics());
+        download.setOnClickListener(v -> downloadCurrentSong());
         if (currentQueueIsPlaylist) {
             ImageButton shuffleButton = iconButton(R.drawable.ic_shuffle,
                     shuffle ? "Tắt tráo bài" : "Bật tráo bài");
@@ -506,6 +532,44 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         });
+    }
+
+    private void downloadCurrentSong() {
+        if (currentSong == null) return;
+        Uri source = Uri.parse(currentSong.audioUrl);
+        String scheme = source.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            Toast.makeText(this, "Bài hát này đã có trên thiết bị hoặc không có đường dẫn tải.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        try {
+            java.io.File directory = new java.io.File(
+                    getExternalFilesDir(Environment.DIRECTORY_MUSIC), "Musibility");
+            if (!directory.isDirectory() && !directory.mkdirs()) {
+                throw new java.io.IOException("Không thể tạo thư mục nhạc đã tải.");
+            }
+            String title = currentSong.title.isEmpty() ? "Bai hat" : currentSong.title;
+            String fileName = title.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+            if (fileName.isEmpty()) fileName = "Bai hat";
+            fileName += "-" + System.currentTimeMillis() + ".mp3";
+
+            DownloadManager.Request request = new DownloadManager.Request(source)
+                    .setTitle(currentSong.title)
+                    .setDescription("Đang tải về Musibility")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setAllowedOverMetered(true)
+                    .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_MUSIC,
+                            "Musibility/" + fileName);
+            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (manager == null) throw new java.io.IOException("Dịch vụ tải xuống của Android không khả dụng.");
+            manager.enqueue(request);
+            Toast.makeText(this, "Đã bắt đầu tải. Bài hát sẽ xuất hiện trong mục Tải về.",
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            showError(e);
+        }
     }
 
     private void sendPlaybackAction(String action) {
@@ -626,10 +690,18 @@ public class MainActivity extends AppCompatActivity {
         currentScreen = "downloads";
         createShell("Nhạc trên thiết bị");
         if (!hasAudioLibraryPermission()) {
-            addLabel(content, "Cho phép Musibility đọc các tệp âm thanh trên thiết bị để hiển thị và phát nhạc đã tải về. Ứng dụng chỉ đọc thư viện nhạc, không tải tệp lên.", 14, Color.LTGRAY);
+            addLabel(content, "Cấp quyền để duyệt nhạc khác trên thiết bị. Nhạc tải bằng Musibility vẫn có thể phát bên dưới.", 14, Color.LTGRAY);
             Button grant = button("Cho phép truy cập nhạc");
             content.addView(grant, matchWrap());
             grant.setOnClickListener(v -> requestAudioLibraryPermission());
+            runAsync(this::loadAppDownloadedSongs, songs -> {
+                if (songs.isEmpty()) {
+                    addLabel(content, "Chưa có bài hát nào được tải bằng Musibility.", 14, Color.GRAY);
+                    return;
+                }
+                addLabel(content, songs.size() + " bài hát đã tải bằng Musibility", 13, Color.LTGRAY);
+                renderSongs(songs, false);
+            });
             return;
         }
         Button refresh = button("↻  Làm mới thư viện");
@@ -747,6 +819,51 @@ public class MainActivity extends AppCompatActivity {
                         "Thiết bị", String.valueOf(mediaId), "", albumArtist, genre, year,
                         trackNumber, displayName, filePath, mimeType, cursor.getLong(sizeColumn), bitrate));
             }
+        }
+        songs.addAll(loadAppDownloadedSongs());
+        return songs;
+    }
+
+    private List<Song> loadAppDownloadedSongs() {
+        List<Song> songs = new ArrayList<>();
+        java.io.File musicDirectory = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+        if (musicDirectory == null) return songs;
+        java.io.File downloadDirectory = new java.io.File(musicDirectory, "Musibility");
+        java.io.File[] files = downloadDirectory.listFiles(file -> file.isFile()
+                && file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".mp3"));
+        if (files == null) return songs;
+        for (java.io.File file : files) {
+            String title = withoutExtension(file.getName()).replaceFirst("-\\d{13}$", "");
+            String artist = "";
+            String album = "";
+            String cover = "";
+            long durationMs = 0;
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            try {
+                retriever.setDataSource(file.getAbsolutePath());
+                title = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_TITLE, title);
+                artist = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_ARTIST, "");
+                album = metadata(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUM, "");
+                String duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                if (duration != null) durationMs = Long.parseLong(duration);
+                byte[] embeddedArt = retriever.getEmbeddedPicture();
+                if (embeddedArt != null) {
+                    long coverId = -Math.abs((long) file.getAbsolutePath().hashCode()) - 1;
+                    cover = cacheCover(coverId, embeddedArt, "");
+                }
+            } catch (Exception e) {
+                android.util.Log.w("Musibility", "Could not read downloaded audio metadata for "
+                        + file.getName(), e);
+            } finally {
+                try { retriever.release(); } catch (Exception e) {
+                    android.util.Log.w("Musibility", "Could not release metadata retriever", e);
+                }
+            }
+            long id = -Math.abs((long) file.getAbsolutePath().hashCode()) - 1;
+            songs.add(new Song(id, title, artist, 0, album, cover,
+                    Uri.fromFile(file).toString(), "", (int) Math.max(0, durationMs / 1000), "",
+                    "Đã tải", String.valueOf(id), "", "", "", "", "", file.getName(),
+                    file.getAbsolutePath(), "audio/mpeg", file.length(), 0));
         }
         return songs;
     }
@@ -962,9 +1079,50 @@ public class MainActivity extends AppCompatActivity {
                         bitmap = BitmapFactory.decodeStream(input);
                     }
                 }
-                if (bitmap != null) mainHandler.post(() -> target.setImageBitmap(bitmap));
+                if (bitmap != null) mainHandler.post(() -> {
+                    target.setImageBitmap(bitmap);
+                    if (target == playerCoverImage) applyPlayerBackground(bitmap);
+                });
             } catch (Exception e) { android.util.Log.w("Musibility", "Could not load album art", e); }
         });
+    }
+
+    private void applyPlayerBackground(android.graphics.Bitmap artwork) {
+        int red = 25;
+        int green = 48;
+        int blue = 70;
+        if (artwork != null && artwork.getWidth() > 0 && artwork.getHeight() > 0) {
+            long totalRed = 0;
+            long totalGreen = 0;
+            long totalBlue = 0;
+            int count = 0;
+            int stepX = Math.max(1, artwork.getWidth() / 24);
+            int stepY = Math.max(1, artwork.getHeight() / 24);
+            for (int y = 0; y < artwork.getHeight(); y += stepY) {
+                for (int x = 0; x < artwork.getWidth(); x += stepX) {
+                    int pixel = artwork.getPixel(x, y);
+                    if (Color.alpha(pixel) < 128) continue;
+                    totalRed += Color.red(pixel);
+                    totalGreen += Color.green(pixel);
+                    totalBlue += Color.blue(pixel);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                red = (int) (totalRed / count);
+                green = (int) (totalGreen / count);
+                blue = (int) (totalBlue / count);
+            }
+        }
+        int top = Color.rgb(Math.min(255, (int) (red * 0.72f + 24)),
+                Math.min(255, (int) (green * 0.72f + 24)),
+                Math.min(255, (int) (blue * 0.72f + 24)));
+        int bottom = Color.rgb((int) (red * 0.30f + 4),
+                (int) (green * 0.30f + 4), (int) (blue * 0.30f + 4));
+        root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{top, bottom}));
+        getWindow().setStatusBarColor(Color.rgb((int) (red * 0.52f + 10),
+                (int) (green * 0.52f + 10), (int) (blue * 0.52f + 10)));
     }
 
     private interface ResultCallback<T> { void onResult(T result); }

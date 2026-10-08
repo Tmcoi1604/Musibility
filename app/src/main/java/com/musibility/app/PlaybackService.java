@@ -10,10 +10,15 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.media.app.NotificationCompat.MediaStyle;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.MediaItem;
@@ -42,6 +47,7 @@ public class PlaybackService extends Service {
     private final Handler handler = new Handler();
     private final ArrayList<Song> queue = new ArrayList<>();
     private ExoPlayer player;
+    private MediaSessionCompat mediaSession;
     private int currentIndex = -1;
     private boolean shuffle;
     private boolean preparing;
@@ -58,6 +64,30 @@ public class PlaybackService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         createNotificationChannel();
+        mediaSession = new MediaSessionCompat(this, "Musibility");
+        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS
+                | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession.setCallback(new MediaSessionCompat.Callback() {
+            @Override public void onPlay() {
+                if (player != null) player.play();
+                else if (currentIndex >= 0) playCurrent();
+                publishState();
+            }
+
+            @Override public void onPause() {
+                if (player != null) player.pause();
+                publishState();
+            }
+
+            @Override public void onSkipToNext() { playNext(true); }
+
+            @Override public void onSkipToPrevious() { playNext(false); }
+
+            @Override public void onSeekTo(long position) {
+                if (player != null) player.seekTo(Math.max(0, position));
+                publishState();
+            }
+        });
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -138,6 +168,10 @@ public class PlaybackService extends Service {
                     } else if (playbackState == Player.STATE_ENDED) {
                         playNext(true);
                     }
+                    publishState();
+                }
+
+                @Override public void onIsPlayingChanged(boolean isPlaying) {
                     publishState();
                 }
 
@@ -265,6 +299,7 @@ public class PlaybackService extends Service {
                 .putInt("position", position)
                 .putInt("duration", duration)
                 .apply();
+        updateMediaSession(song, isPlaying, position, duration);
         Intent state = new Intent(ACTION_STATE).setPackage(getPackageName());
         state.putExtra("title", song == null ? "" : song.title);
         state.putExtra("artist", song == null ? "" : song.artist);
@@ -287,22 +322,64 @@ public class PlaybackService extends Service {
         }
     }
 
+    private void updateMediaSession(Song song, boolean isPlaying, int position, int duration) {
+        if (mediaSession == null) return;
+        if (song != null) {
+            mediaSession.setMetadata(new MediaMetadataCompat.Builder()
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
+                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, song.album)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
+                    .build());
+        } else {
+            mediaSession.setMetadata(null);
+        }
+        long actions = PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
+                | PlaybackStateCompat.ACTION_PLAY_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
+                | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS | PlaybackStateCompat.ACTION_SEEK_TO;
+        int state = preparing ? PlaybackStateCompat.STATE_BUFFERING
+                : isPlaying ? PlaybackStateCompat.STATE_PLAYING
+                : song == null ? PlaybackStateCompat.STATE_STOPPED : PlaybackStateCompat.STATE_PAUSED;
+        mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                .setActions(actions)
+                .setState(state, position, isPlaying ? 1f : 0f, SystemClock.elapsedRealtime())
+                .build());
+        mediaSession.setActive(song != null);
+    }
+
     private Notification notification(String title, String artist) {
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent content = PendingIntent.getActivity(this, 0, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent previous = serviceAction(ACTION_PREVIOUS, 2);
         Intent toggle = new Intent(this, PlaybackService.class).setAction(ACTION_TOGGLE);
         PendingIntent playPause = PendingIntent.getService(this, 1, toggle,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent next = serviceAction(ACTION_NEXT, 3);
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentTitle(title)
                 .setContentText(artist)
                 .setContentIntent(content)
-                .addAction(android.R.drawable.ic_media_pause, "Phát/Tạm dừng", playPause)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .addAction(android.R.drawable.ic_media_previous, "Bài trước", previous)
+                .addAction(player != null && player.isPlaying()
+                        ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
+                        player != null && player.isPlaying() ? "Tạm dừng" : "Phát", playPause)
+                .addAction(android.R.drawable.ic_media_next, "Bài tiếp", next)
+                .setStyle(new MediaStyle()
+                        .setMediaSession(mediaSession == null ? null : mediaSession.getSessionToken())
+                        .setShowActionsInCompactView(0, 1, 2))
                 .setOngoing(player != null && player.isPlaying())
                 .setOnlyAlertOnce(true)
                 .build();
+    }
+
+    private PendingIntent serviceAction(String action, int requestCode) {
+        Intent intent = new Intent(this, PlaybackService.class).setAction(action);
+        return PendingIntent.getService(this, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     private void createNotificationChannel() {
@@ -319,6 +396,11 @@ public class PlaybackService extends Service {
 
     @Override public void onDestroy() {
         releasePlayer();
+        if (mediaSession != null) {
+            mediaSession.setActive(false);
+            mediaSession.release();
+            mediaSession = null;
+        }
         fallbackWorker.shutdownNow();
         super.onDestroy();
     }
