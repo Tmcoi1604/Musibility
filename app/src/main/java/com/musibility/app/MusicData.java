@@ -2,8 +2,6 @@ package com.musibility.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.location.Location;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -18,7 +16,7 @@ public final class MusicData {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public static void recordPlay(Context context, Song song, Location location) {
+    public static void recordPlay(Context context, Song song) {
         SharedPreferences p = prefs(context);
         try {
             JSONArray history = new JSONArray(p.getString("history", "[]"));
@@ -26,34 +24,13 @@ public final class MusicData {
             history.put(item);
             while (history.length() > 50) history.remove(0);
             p.edit().putString("history", history.toString()).apply();
-            if (location != null) {
-                JSONArray places = new JSONArray(p.getString("places", "[]"));
-                item.put("lat", location.getLatitude());
-                item.put("lng", location.getLongitude());
-                item.put("time", System.currentTimeMillis());
-                places.put(item);
-                while (places.length() > 300) places.remove(0);
-                p.edit().putString("places", places.toString()).apply();
-            }
         } catch (Exception e) {
             android.util.Log.e("Musibility", "Could not save listening history", e);
         }
     }
 
-    public static void recordLocation(Context context, Song song, Location location) {
-        if (location == null) return;
-        try {
-            JSONArray places = new JSONArray(prefs(context).getString("places", "[]"));
-            JSONObject item = toJson(song);
-            item.put("lat", location.getLatitude());
-            item.put("lng", location.getLongitude());
-            item.put("time", System.currentTimeMillis());
-            places.put(item);
-            while (places.length() > 300) places.remove(0);
-            prefs(context).edit().putString("places", places.toString()).apply();
-        } catch (Exception e) {
-            android.util.Log.e("Musibility", "Could not save listening location", e);
-        }
+    public static void clearListeningLocations(Context context) {
+        prefs(context).edit().remove("places").apply();
     }
 
     public static List<Song> recentSongs(Context context) {
@@ -66,22 +43,6 @@ public final class MusicData {
             android.util.Log.e("Musibility", "Could not read listening history", e);
         }
         return result;
-    }
-
-    public static List<JSONObject> places(Context context) {
-        List<JSONObject> result = new ArrayList<>();
-        try {
-            JSONArray places = new JSONArray(prefs(context).getString("places", "[]"));
-            for (int i = 0; i < places.length(); i++) result.add(places.getJSONObject(i));
-        } catch (Exception e) {
-            android.util.Log.e("Musibility", "Could not read listening locations", e);
-        }
-        return result;
-    }
-
-    public static void createLocationPlaylist(Context context, String name, List<Song> songs) throws Exception {
-        createPlaylist(context, name);
-        for (Song song : songs) addToPlaylist(context, name, song);
     }
 
     public static List<String> playlistNames(Context context) {

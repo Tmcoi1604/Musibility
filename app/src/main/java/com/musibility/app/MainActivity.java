@@ -14,14 +14,10 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
-import android.location.Location;
-import android.location.LocationManager;
-import android.location.LocationListener;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Environment;
 import android.media.MediaMetadataRetriever;
 import android.provider.MediaStore;
@@ -74,10 +70,12 @@ public class MainActivity extends AppCompatActivity {
     private ImageView playerCoverImage;
     private boolean shuffle;
     private boolean currentQueueIsPlaylist;
-    private Song pendingLocationSong;
-    private boolean returningFromMap;
     private String currentScreen = "discover";
     private ImageButton playerPlayButton;
+    private ImageButton miniPlayButton;
+    private ImageView miniCoverImage;
+    private TextView miniTitle;
+    private TextView miniArtist;
     private TextView playerTime;
     private SeekBar playerSeekBar;
     private TextView lyricsText;
@@ -114,8 +112,10 @@ public class MainActivity extends AppCompatActivity {
             if (stateSong instanceof Song && (currentSong == null || currentSong.id != ((Song) stateSong).id)) {
                 currentSong = (Song) stateSong;
                 if ("player".equals(currentScreen)) showPlayer();
+                else updateMiniPlayerSong();
             }
             boolean playing = intent.getBooleanExtra("playing", false);
+            updateMiniPlayerPlayback(playing);
             if (playerPlayButton != null) {
                 playerPlayButton.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
                 playerPlayButton.setContentDescription(playing ? "Tạm dừng" : "Phát");
@@ -139,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        MusicData.clearListeningLocations(this);
         getWindow().setStatusBarColor(Color.rgb(1, 1, 1));
         getWindow().setNavigationBarColor(Color.rgb(1, 1, 1));
         IntentFilter filter = new IntentFilter(PlaybackService.ACTION_STATE);
@@ -152,14 +153,6 @@ public class MainActivity extends AppCompatActivity {
         showDiscover();
     }
 
-    @Override protected void onResume() {
-        super.onResume();
-        if (returningFromMap) {
-            returningFromMap = false;
-            showDiscover();
-        }
-    }
-
     @Override protected void onDestroy() {
         try { unregisterReceiver(playbackReceiver); } catch (IllegalArgumentException ignored) { }
         worker.shutdown();
@@ -170,42 +163,128 @@ public class MainActivity extends AppCompatActivity {
     private void createShell(String title) {
         screenGeneration++;
         playerCoverImage = null;
+        miniPlayButton = null;
+        miniCoverImage = null;
+        miniTitle = null;
+        miniArtist = null;
         getWindow().setStatusBarColor(Color.rgb(1, 1, 1));
         if (backToDiscoverCallback != null) backToDiscoverCallback.setEnabled(true);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(1, 1, 1));
+        boolean fullPlayer = "player".equals(currentScreen);
+        LinearLayout headingRow = new LinearLayout(this);
+        headingRow.setGravity(Gravity.CENTER_VERTICAL);
+        if (fullPlayer) {
+            ImageButton back = iconButton(R.drawable.ic_back, "Thu nhỏ trình phát");
+            headingRow.addView(back);
+            back.setOnClickListener(v -> showDiscover());
+        }
         TextView heading = new TextView(this);
         heading.setText(title);
         heading.setTextColor(Color.WHITE);
         heading.setTextSize(27);
         heading.setTypeface(null, Typeface.BOLD);
-        heading.setPadding(dp(20), dp(16), dp(16), dp(12));
-        root.addView(heading);
+        heading.setPadding(fullPlayer ? dp(4) : dp(20), dp(16), dp(16), dp(12));
+        headingRow.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(headingRow);
         ScrollView scroll = new ScrollView(this);
         content = new LinearLayout(this);
         content.setPadding(dp(16), dp(6), dp(16), dp(20));
         content.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (!fullPlayer && currentSong != null) addMiniPlayer();
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER);
         nav.setBackgroundColor(Color.rgb(18, 18, 18));
         String[][] tabs = {{"Khám phá", "discover"}, {"Playlist", "playlists"},
                 {"Tải về", "downloads"}, {"Nhận diện", "identify"},
-                {"Bản đồ", "map"}, {"Đang phát", "player"}};
-        for (String[] tab : tabs) {
-            TextView item = new TextView(this);
-            item.setText(tab[0]);
-            item.setTextSize(11);
+                {"Đang phát", "player"}};
+        int[] tabIcons = {R.drawable.ic_home, R.drawable.ic_playlist, R.drawable.ic_downloads,
+                R.drawable.ic_mic, R.drawable.ic_play};
+        for (int i = 0; i < tabs.length; i++) {
+            String[] tab = tabs[i];
+            int tint = tab[1].equals(currentScreen) ? Color.rgb(215, 250, 0) : Color.LTGRAY;
+            LinearLayout item = new LinearLayout(this);
             item.setGravity(Gravity.CENTER);
-            item.setTextColor(tab[1].equals(currentScreen) ? Color.rgb(215, 250, 0) : Color.LTGRAY);
-            item.setPadding(dp(3), dp(13), dp(3), dp(13));
+            item.setOrientation(LinearLayout.VERTICAL);
+            ImageView icon = new ImageView(this);
+            icon.setImageResource(tabIcons[i]);
+            icon.setColorFilter(tint);
+            item.addView(icon, new LinearLayout.LayoutParams(dp(22), dp(22)));
+            TextView label = new TextView(this);
+            label.setText(tab[0]);
+            label.setTextSize(9);
+            label.setGravity(Gravity.CENTER);
+            label.setTextColor(tint);
+            label.setMaxLines(1);
+            item.addView(label);
+            item.setContentDescription(tab[0]);
+            item.setPadding(dp(2), dp(6), dp(2), dp(5));
             item.setOnClickListener(v -> navigate(tab[1]));
-            nav.addView(item, new LinearLayout.LayoutParams(0, -2, 1));
+            nav.addView(item, new LinearLayout.LayoutParams(0, dp(58), 1));
         }
         root.addView(nav);
         setContentView(root);
+    }
+
+    private void addMiniPlayer() {
+        LinearLayout miniPlayer = new LinearLayout(this);
+        miniPlayer.setGravity(Gravity.CENTER_VERTICAL);
+        miniPlayer.setPadding(dp(8), dp(6), dp(8), dp(6));
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.rgb(46, 27, 59));
+        background.setCornerRadius(dp(8));
+        miniPlayer.setBackground(background);
+        LinearLayout.LayoutParams playerParams = new LinearLayout.LayoutParams(-1, dp(56));
+        playerParams.setMargins(dp(8), dp(4), dp(8), dp(4));
+
+        miniCoverImage = new ImageView(this);
+        miniCoverImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        miniPlayer.addView(miniCoverImage, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        LinearLayout songInfo = new LinearLayout(this);
+        songInfo.setOrientation(LinearLayout.VERTICAL);
+        songInfo.setGravity(Gravity.CENTER_VERTICAL);
+        songInfo.setPadding(dp(10), 0, dp(4), 0);
+        miniTitle = new TextView(this);
+        miniTitle.setTextColor(Color.WHITE);
+        miniTitle.setTextSize(14);
+        miniTitle.setTypeface(null, Typeface.BOLD);
+        miniTitle.setMaxLines(1);
+        songInfo.addView(miniTitle);
+        miniArtist = new TextView(this);
+        miniArtist.setTextColor(Color.LTGRAY);
+        miniArtist.setTextSize(12);
+        miniArtist.setMaxLines(1);
+        songInfo.addView(miniArtist);
+        miniPlayer.addView(songInfo, new LinearLayout.LayoutParams(0, -1, 1));
+        ImageButton addToPlaylist = iconButton(R.drawable.ic_add_playlist, "Thêm vào playlist");
+        addToPlaylist.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(48)));
+        miniPlayer.addView(addToPlaylist);
+        miniPlayButton = iconButton(R.drawable.ic_play, "Phát");
+        miniPlayButton.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(48)));
+        miniPlayer.addView(miniPlayButton);
+        miniPlayer.setOnClickListener(v -> showPlayer());
+        addToPlaylist.setOnClickListener(v -> choosePlaylist());
+        miniPlayButton.setOnClickListener(v -> sendPlaybackAction(PlaybackService.ACTION_TOGGLE));
+        root.addView(miniPlayer, playerParams);
+        updateMiniPlayerSong();
+        updateMiniPlayerPlayback(getSharedPreferences("musibility_widget", MODE_PRIVATE)
+                .getBoolean("playing", false));
+    }
+
+    private void updateMiniPlayerSong() {
+        if (currentSong == null) return;
+        if (miniTitle != null) miniTitle.setText(currentSong.title);
+        if (miniArtist != null) miniArtist.setText(currentSong.artist);
+        if (miniCoverImage != null) loadImage(currentSong.coverUrl, miniCoverImage);
+    }
+
+    private void updateMiniPlayerPlayback(boolean playing) {
+        if (miniPlayButton == null) return;
+        miniPlayButton.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
+        miniPlayButton.setContentDescription(playing ? "Tạm dừng" : "Phát");
     }
 
     private void navigate(String page) {
@@ -213,7 +292,6 @@ public class MainActivity extends AppCompatActivity {
         else if ("playlists".equals(page)) showPlaylists();
         else if ("downloads".equals(page)) showDownloads();
         else if ("identify".equals(page)) showIdentify();
-        else if ("map".equals(page)) openMap();
         else showPlayer();
     }
 
@@ -423,7 +501,7 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra(PlaybackService.EXTRA_INDEX, index);
         intent.putExtra(PlaybackService.EXTRA_SHUFFLE, shuffle);
         showPlayer();
-        MusicData.recordPlay(this, currentSong, getLastLocation());
+        MusicData.recordPlay(this, currentSong);
         startPlaybackService(intent);
     }
 
@@ -987,67 +1065,6 @@ public class MainActivity extends AppCompatActivity {
         currentScreen = "discover";
         createShell("Kết quả nhận diện");
         runAsync(() -> MusicCatalog.searchTracks(title), this::addSongs);
-    }
-
-    private void openMap() {
-        if (BuildConfig.GOOGLE_MAPS_KEY.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Cần Google Maps API key")
-                    .setMessage("Thêm google.maps.key=YOUR_KEY vào local.properties và bật Maps SDK for Android trong Google Cloud Console.")
-                    .setPositiveButton("Mở bản đồ", (d, w) -> launchMap())
-                    .setNegativeButton("Đóng", null).show();
-        } else launchMap();
-    }
-
-    private void launchMap() {
-        returningFromMap = true;
-        startActivity(new Intent(this, MapActivity.class));
-    }
-
-    private Location getLastLocation() {
-        if (Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return null;
-        }
-        try {
-            LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-            boolean finePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            String provider = finePermission ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
-            Location known = manager.getLastKnownLocation(provider);
-            if (known == null) requestOneLocation(manager, currentSong);
-            return known;
-        } catch (SecurityException e) {
-            return null;
-        }
-    }
-
-    private void requestOneLocation(LocationManager manager, Song song) {
-        if (song == null) return;
-        pendingLocationSong = song;
-        LocationListener listener = new LocationListener() {
-            @Override public void onLocationChanged(Location location) {
-                if (pendingLocationSong == song) {
-                    pendingLocationSong = null;
-                    MusicData.recordLocation(MainActivity.this, song, location);
-                }
-                try { manager.removeUpdates(this); } catch (SecurityException ignored) { }
-            }
-            @Override public void onProviderEnabled(String provider) { }
-            @Override public void onProviderDisabled(String provider) { }
-            @Override public void onStatusChanged(String provider, int status, android.os.Bundle extras) { }
-        };
-        try {
-            boolean finePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            String network = LocationManager.NETWORK_PROVIDER;
-            String provider = manager.isProviderEnabled(network) ? network
-                    : finePermission ? LocationManager.GPS_PROVIDER : network;
-            if (!manager.isProviderEnabled(provider)) return;
-            manager.requestSingleUpdate(provider, listener, Looper.getMainLooper());
-        } catch (Exception e) {
-            android.util.Log.w("Musibility", "Could not request one-time location", e);
-        }
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
