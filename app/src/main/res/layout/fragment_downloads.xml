@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/lbl_downloads_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cấp quyền để duyệt nhạc khác trên thiết bị. Nhạc tải bằng Musibility vẫn có thể phát mà không cần quyền đọc bộ nhớ."
+        android:textColor="@color/text_light_gray"
+        android:textSize="13sp"
+        android:padding="6dp" />
+
+    <Button
+        android:id="@+id/btn_grant_storage_permission"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cho phép truy cập nhạc"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null"
+        android:visibility="gone"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btn_refresh_downloads"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="↻  Làm mới thư viện"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/lbl_downloads_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_light_gray"
+        android:textSize="13sp"
+        android:padding="6dp" />
+
+    <LinearLayout
+        android:id="@+id/downloads_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+</LinearLayout>

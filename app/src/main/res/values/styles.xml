@@ -2,11 +2,19 @@
     <style name="Theme.Musibility" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#D7FA00</item>
         <item name="colorPrimaryVariant">#B6D400</item>
-        <item name="colorSecondary">#D7FA00</item>
+        <item name="colorSecondary">#843E67</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:statusBarColor">#010101</item>
         <item name="android:navigationBarColor">#010101</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowBackground">#010101</item>
+        <item name="materialButtonStyle">@style/Widget.Musibility.Button</item>
+    </style>
+
+    <style name="Widget.Musibility.Button" parent="Widget.MaterialComponents.Button">
+        <item name="android:background">@drawable/bg_purple_button</item>
+        <item name="backgroundTint">@null</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/text_white</item>
     </style>
 </resources>

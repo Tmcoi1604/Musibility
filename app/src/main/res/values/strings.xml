@@ -1,4 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Musibility</string>
     <string name="widget_description">Điều khiển nhạc Musibility</string>
+
+    <string name="nav_discover">Khám phá</string>
+    <string name="nav_library">Thư viện</string>
+    <string name="nav_playlists">Playlist</string>
+    <string name="nav_downloads">Tải về</string>
+    <string name="nav_voice_conversion">Đổi giọng</string>
+    <string name="nav_identify">Nhận diện</string>
+    <string name="nav_player">Đang phát</string>
+
+    <string name="search_hint">Tìm bài hát, ca sĩ…</string>
+    <string name="tab_chart">Bảng xếp hạng</string>
+    <string name="tab_downloaded">Nhạc đã tải</string>
+    <string name="trending_title">Đang thịnh hành</string>
+    <string name="trending_subtitle">Những bài được nghe nhiều</string>
+    <string name="recommendations_title">Đề xuất cho bạn</string>
+
+    <string name="voice_conversion_title">Đổi giọng AI</string>
+    <string name="voice_conversion_subtitle">Chọn một bài hát trên điện thoại, chọn voice có sẵn trên PC rồi tạo bản mới.</string>
+    <string name="voice_step_1">1. Chọn bài hát từ máy</string>
+    <string name="btn_pick_audio">Chọn file nhạc</string>
+    <string name="voice_recent_audio">Hoặc chọn nhạc gần đây trên máy:</string>
+    <string name="voice_step_2">2. Chọn voice mục tiêu</string>
+    <string name="btn_create_voice_job">Tạo bản đổi giọng</string>
+    <string name="btn_play_voice_result">Phát bản đã đổi giọng</string>
+    <string name="voice_backend_config">Cấu hình kết nối Backend (PC cùng Wi-Fi)</string>
+    <string name="backend_url_label">Địa chỉ backend (PC cùng Wi-Fi)</string>
+    <string name="backend_url_hint">http://192.168.1.20:8000</string>
+    <string name="api_key_label">API key (để trống nếu backend không yêu cầu)</string>
+    <string name="api_key_hint">API key (tuỳ chọn)</string>
+    <string name="btn_test_connection">Kiểm tra kết nối và tải voices</string>
 </resources>

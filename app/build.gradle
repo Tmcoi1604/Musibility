@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
 def localProperties = new Properties()
@@ -25,13 +26,12 @@ android {
         versionCode 1
         versionName '1.0'
         buildConfigField 'String', 'JAMENDO_CLIENT_ID', "\"${localProperties.getProperty('jamendo.clientId', '')}\""
-        buildConfigField 'String', 'ACR_ACCESS_KEY', "\"${localProperties.getProperty('acrcloud.accessKey', '')}\""
-        buildConfigField 'String', 'ACR_ACCESS_SECRET', "\"${localProperties.getProperty('acrcloud.accessSecret', '')}\""
-        buildConfigField 'String', 'ACR_HOST', "\"${localProperties.getProperty('acrcloud.host', '')}\""
+        buildConfigField 'String', 'AUDD_API_TOKEN', "\"${localProperties.getProperty('audd.apiToken', '')}\""
     }
 
     buildFeatures {
         buildConfig true
+        viewBinding true
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

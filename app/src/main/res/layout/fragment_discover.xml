@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Search Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp">
+
+        <EditText
+            android:id="@+id/search_field"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:hint="@string/search_hint"
+            android:textColorHint="@color/text_gray"
+            android:textColor="@android:color/black"
+            android:singleLine="true"
+            android:imeOptions="actionSearch"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:background="@drawable/bg_search_input" />
+
+        <ImageButton
+            android:id="@+id/btn_search"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_search"
+            android:contentDescription="@string/search_hint" />
+    </LinearLayout>
+
+    <!-- Shortcuts Label -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Lối tắt"
+        android:textColor="@color/text_white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:paddingBottom="8dp" />
+
+    <!-- Shortcuts Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="62dp"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/btn_shortcut_chart"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:gravity="center"
+            android:text="♫  Bảng xếp hạng"
+            android:textColor="@color/text_white"
+            android:textSize="11.5sp"
+            android:textAllCaps="false"
+            android:background="@drawable/bg_purple_button"
+            app:backgroundTint="@null" />
+
+        <Button
+            android:id="@+id/btn_shortcut_playlists"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:gravity="center"
+            android:text="≡  Playlist"
+            android:textColor="@color/text_white"
+            android:textSize="11.5sp"
+            android:textAllCaps="false"
+            android:background="@drawable/bg_shortcut_playlist"
+            app:backgroundTint="@null" />
+
+        <Button
+            android:id="@+id/btn_shortcut_identify"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:gravity="center"
+            android:text="🎙  Nhận diện"
+            android:textColor="@color/text_white"
+            android:textSize="11.5sp"
+            android:textAllCaps="false"
+            android:background="@drawable/bg_shortcut_identify"
+            app:backgroundTint="@null" />
+    </LinearLayout>
+
+    <!-- Container for search results or trending & recommendations -->
+    <LinearLayout
+        android:id="@+id/discover_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+</LinearLayout>

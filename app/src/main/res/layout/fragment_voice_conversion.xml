@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/voice_header_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/voice_conversion_subtitle"
+        android:textColor="@color/text_light_gray"
+        android:textSize="14sp"
+        android:padding="8dp" />
+
+    <!-- Step 1: Pick audio file -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/voice_step_1"
+        android:textColor="@color/text_white"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:paddingTop="12dp"
+        android:paddingBottom="6dp" />
+
+    <Button
+        android:id="@+id/btn_pick_audio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_pick_audio"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null" />
+
+    <TextView
+        android:id="@+id/lbl_selected_audio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Chưa chọn file nhạc."
+        android:textColor="@color/text_light_gray"
+        android:textSize="13sp"
+        android:padding="6dp" />
+
+    <!-- Recent audio container -->
+    <LinearLayout
+        android:id="@+id/recent_audio_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+    <!-- Step 2: Select Target Voice -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/voice_step_2"
+        android:textColor="@color/text_white"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:paddingTop="12dp"
+        android:paddingBottom="6dp" />
+
+    <Spinner
+        android:id="@+id/voice_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/bg_purple_button"
+        android:popupBackground="@drawable/bg_purple_button" />
+
+    <Button
+        android:id="@+id/btn_create_voice_job"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/btn_create_voice_job"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null" />
+
+    <ProgressBar
+        android:id="@+id/voice_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:max="100"
+        android:visibility="gone"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/lbl_voice_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_white"
+        android:textSize="14sp"
+        android:textIsSelectable="true"
+        android:padding="8dp" />
+
+    <TextView
+        android:id="@+id/lbl_voice_result_path"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_light_gray"
+        android:textSize="12sp"
+        android:textIsSelectable="true"
+        android:padding="4dp" />
+
+    <Button
+        android:id="@+id/btn_play_voice_result"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_play_voice_result"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null"
+        android:visibility="gone"
+        android:layout_marginTop="6dp" />
+
+    <!-- Backend Config at Bottom -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider_color"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/backend_url_label"
+        android:textColor="@color/color_primary"
+        android:textSize="14sp"
+        android:padding="4dp" />
+
+    <EditText
+        android:id="@+id/input_voice_server"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="@string/backend_url_hint"
+        android:textColorHint="@color/text_gray"
+        android:textColor="@android:color/black"
+        android:inputType="textUri"
+        android:singleLine="true"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:background="@drawable/bg_search_input" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/api_key_label"
+        android:textColor="@color/text_light_gray"
+        android:textSize="13sp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp" />
+
+    <EditText
+        android:id="@+id/input_voice_api_key"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:hint="@string/api_key_hint"
+        android:textColorHint="@color/text_gray"
+        android:textColor="@android:color/black"
+        android:inputType="textPassword"
+        android:singleLine="true"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:background="@drawable/bg_search_input" />
+
+    <Button
+        android:id="@+id/btn_load_voices"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/btn_test_connection"
+        android:textColor="@color/text_white"
+        android:textAllCaps="false"
+        android:background="@drawable/bg_purple_button"
+        app:backgroundTint="@null" />
+
+</LinearLayout>

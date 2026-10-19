@@ -14,15 +14,13 @@
 
    Không cần gói trả phí hoặc thẻ thanh toán cho Audius và catalog Jamendo công khai. Nếu chưa cấu hình Jamendo ID, stream Audius vẫn hoạt động; chỉ nguồn dự phòng Jamendo không khả dụng.
 
-4. Nhận diện bài hát là tùy chọn, không cần thiết lập để nghe nhạc. Nếu muốn bật, tạo tài khoản tại [ACRCloud](https://console.acrcloud.com/) và tạo project nhận diện **Audio & Video Recognition**. Lấy Host, Access Key và Access Secret trong thông tin project, rồi thêm vào `local.properties`:
+4. Nhận diện bài hát sử dụng AudD. Tạo API token từ [AudD](https://audd.io/) và thêm vào `local.properties` ở thư mục gốc:
 
    ```properties
-   acrcloud.host=YOUR_ACRCLOUD_HOST
-   acrcloud.accessKey=YOUR_ACRCLOUD_ACCESS_KEY
-   acrcloud.accessSecret=YOUR_ACRCLOUD_ACCESS_SECRET
+   audd.apiToken=YOUR_AUDD_API_TOKEN
    ```
 
-   Chỉ dùng hostname cho `acrcloud.host` (không thêm `https://` hay đường dẫn). ACRCloud có hạn mức/điều khoản riêng; nếu không cấu hình thì nhận diện không hoạt động, nhưng phát nhạc vẫn dùng được. Không đưa khóa/bí mật vào mã nguồn; `local.properties` đã được loại khỏi Git.
+   `local.properties` không được commit. Gradle đưa token vào cấu hình build để app gọi AudD trực tiếp; token có thể được trích xuất từ APK đã phân phối, vì vậy ứng dụng phát hành công khai nên gọi AudD qua backend do bạn kiểm soát.
 
 ## Tính năng
 
@@ -38,7 +36,10 @@
 - Tạo playlist cá nhân, phát playlist/album, phát/dừng, tua, chuyển bài, tráo bài, chia sẻ đường dẫn; widget màn hình chính dạng thẻ ngang có ảnh bìa, tên bài hát, nghệ sĩ, tiến trình và nút điều khiển.
 - Jamendo fallback chỉ chọn track có URL audio và thông tin giấy phép Creative Commons; giấy phép có liên kết từ màn hình phát.
 - Lời bài hát từ LRCLIB khi có dữ liệu, đồng bộ khi nguồn cung cấp timed lyrics.
-- Nhận diện âm thanh bằng microphone và ACRCloud nếu người dùng tự cấu hình. Android không cho ứng dụng thông thường đọc trực tiếp âm thanh nội bộ đang phát qua loa; hướng microphone về nguồn âm thanh bên ngoài.
+- Nhận diện âm thanh bằng microphone và AudD sau khi cấu hình API token, cấp quyền microphone và có kết nối Internet. App ghi 10 giây âm thanh WAV mono rồi gửi tới AudD qua HTTPS; Android không cho ứng dụng thông thường đọc trực tiếp âm thanh nội bộ đang phát qua loa, vì vậy hãy hướng microphone về nguồn âm thanh bên ngoài.
+- Khi nhận diện thành công, app mở trang **Bài hát được nhận diện** với ảnh bìa (nếu AudD cung cấp), tên bài hát và nghệ sĩ; nút **Tìm bài hát này** tra cứu bài hát trong **Khám phá**. Nút X hoặc nút Back của điện thoại đóng kết quả và trở về giao diện nhận diện. Kết quả được giữ khi chuyển tab hoặc rời app nhưng vẫn còn trong danh sách ứng dụng gần đây; xóa Musibility khỏi danh sách đó sẽ đóng phiên và xóa kết quả đang mở.
+- Trang **Lịch sử nhận diện** trong giao diện nhận diện lưu tối đa 50 bài hát đã nhận diện gần nhất trên thiết bị. Chọn một mục trong lịch sử để xem lại trang kết quả của bài hát đó.
+- Đổi giọng AI qua backend do người dùng cấu hình: kiểm tra kết nối và tải danh sách voice, chọn tệp MP3/WAV/FLAC/M4A/OGG từ máy hoặc chọn nhanh nhạc gần đây, theo dõi tiến trình xử lý, rồi tải và phát kết quả WAV ngay trong app. Tính năng này cần backend tương thích đang chạy trên PC; điện thoại và PC cần kết nối được với nhau qua mạng. Nhập địa chỉ backend (ví dụ `http://192.168.1.20:8000`) trong tab **Đổi giọng**; API key chỉ cần nếu backend yêu cầu. Địa chỉ và API key được lưu trên thiết bị. Kết quả được lưu trong thư mục Tải xuống, hoặc thư mục Tải xuống riêng của ứng dụng nếu không ghi được vào thư mục đó.
 
 ### Nghe nhạc đã tải về
 
@@ -48,4 +49,4 @@
 
 ## Dữ liệu và quyền riêng tư
 
-Lịch sử nghe và playlist được lưu cục bộ trên thiết bị. Thư viện nhạc trên thiết bị chỉ được đọc sau khi người dùng cấp quyền âm thanh (Android 13 trở lên yêu cầu quyền nhạc/âm thanh; phiên bản cũ hơn dùng quyền đọc bộ nhớ); ứng dụng không tải tệp nhạc lên. Tìm kiếm/stream Audius được gửi tới API Audius; chỉ khi fallback mới gọi Jamendo. Lời bài hát được lấy từ LRCLIB. Âm thanh thu chỉ được gửi tới ACRCloud khi người dùng chủ động chạy nhận diện.
+Lịch sử nghe, lịch sử nhận diện (tối đa 50 mục) và playlist được lưu cục bộ trên thiết bị. Thư viện nhạc trên thiết bị chỉ được đọc sau khi người dùng cấp quyền âm thanh (Android 13 trở lên yêu cầu quyền nhạc/âm thanh; phiên bản cũ hơn dùng quyền đọc bộ nhớ). Nhạc không được tải lên cho việc phát thông thường; khi người dùng chủ động tạo bản đổi giọng, tệp đã chọn được gửi tới backend do người dùng cấu hình để xử lý. Tìm kiếm/stream Audius được gửi tới API Audius; chỉ khi fallback mới gọi Jamendo. Lời bài hát được lấy từ LRCLIB. Chỉ khi người dùng chủ động chạy nhận diện, app mới ghi 10 giây âm thanh microphone và gửi tệp tới AudD để tra cứu.

@@ -29,6 +29,31 @@ public final class MusicData {
         }
     }
 
+    public static void recordIdentification(Context context, Song song) {
+        SharedPreferences p = prefs(context);
+        try {
+            JSONArray history = new JSONArray(p.getString("identification_history", "[]"));
+            history.put(toJson(song));
+            while (history.length() > 50) history.remove(0);
+            p.edit().putString("identification_history", history.toString()).apply();
+        } catch (Exception e) {
+            android.util.Log.e("Musibility", "Could not save identification history", e);
+        }
+    }
+
+    public static List<Song> identificationHistory(Context context) {
+        List<Song> result = new ArrayList<>();
+        try {
+            JSONArray history = new JSONArray(prefs(context).getString("identification_history", "[]"));
+            for (int i = history.length() - 1; i >= 0; i--) {
+                result.add(fromJson(history.getJSONObject(i)));
+            }
+        } catch (Exception e) {
+            android.util.Log.e("Musibility", "Could not read identification history", e);
+        }
+        return result;
+    }
+
     public static void clearListeningLocations(Context context) {
         prefs(context).edit().remove("places").apply();
     }

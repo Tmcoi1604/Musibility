@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="color_primary">#D7FA00</color>
+    <color name="color_primary_variant">#B6D400</color>
+    <color name="bg_dark">#010101</color>
+    <color name="bg_nav">#121212</color>
+    <color name="bg_card">#1E1E1E</color>
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_gray">#AAAAAA</color>
+    <color name="text_light_gray">#CCCCCC</color>
+    <color name="purple_start">#843E67</color>
+    <color name="purple_end">#542C5E</color>
+    <color name="divider_color">#2D2D2D</color>
+</resources>

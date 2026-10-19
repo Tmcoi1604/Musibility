@@ -37,10 +37,12 @@ public class PlaybackService extends Service {
     public static final String ACTION_PREVIOUS = "com.musibility.app.PREVIOUS";
     public static final String ACTION_SEEK = "com.musibility.app.SEEK";
     public static final String ACTION_SET_SHUFFLE = "com.musibility.app.SET_SHUFFLE";
+    public static final String ACTION_SET_REPEAT_ONE = "com.musibility.app.SET_REPEAT_ONE";
     public static final String ACTION_STATE = "com.musibility.app.PLAYBACK_STATE";
     public static final String EXTRA_QUEUE = "queue";
     public static final String EXTRA_INDEX = "index";
     public static final String EXTRA_SHUFFLE = "shuffle";
+    public static final String EXTRA_REPEAT_ONE = "repeat_one";
 
     private static final String CHANNEL_ID = "musibility_playback";
     private final ExecutorService fallbackWorker = Executors.newSingleThreadExecutor();
@@ -50,6 +52,7 @@ public class PlaybackService extends Service {
     private MediaSessionCompat mediaSession;
     private int currentIndex = -1;
     private boolean shuffle;
+    private boolean repeatOne;
     private boolean preparing;
     private boolean fallbackAttempted;
     private boolean fallbackInProgress;
@@ -108,6 +111,7 @@ public class PlaybackService extends Service {
             for (Object item : (ArrayList<?>) value) if (item instanceof Song) queue.add((Song) item);
             currentIndex = intent.getIntExtra(EXTRA_INDEX, 0);
             shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false);
+            repeatOne = intent.getBooleanExtra(EXTRA_REPEAT_ONE, false);
             fallbackAttempted = false;
             fallbackInProgress = false;
             lastPlaybackError = "";
@@ -136,6 +140,9 @@ public class PlaybackService extends Service {
             publishState();
         } else if (ACTION_SET_SHUFFLE.equals(action)) {
             shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false);
+        } else if (ACTION_SET_REPEAT_ONE.equals(action)) {
+            repeatOne = intent.getBooleanExtra(EXTRA_REPEAT_ONE, false);
+            if (player != null) player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
         }
         return START_STICKY;
     }
@@ -156,6 +163,7 @@ public class PlaybackService extends Service {
         preparing = true;
         try {
             player = new ExoPlayer.Builder(this).build();
+            player.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
             player.setAudioAttributes(AudioAttributes.DEFAULT, true);
             player.setHandleAudioBecomingNoisy(true);
             player.addListener(new Player.Listener() {
@@ -308,6 +316,7 @@ public class PlaybackService extends Service {
         state.putExtra("position", position);
         state.putExtra("duration", duration);
         state.putExtra("error", lastPlaybackError);
+        state.putExtra(EXTRA_REPEAT_ONE, repeatOne);
         lastPlaybackError = "";
         sendBroadcast(state);
         MusicWidgetProvider.refresh(this);
